@@ -1,0 +1,628 @@
+#include <RcppArmadillo.h>
+
+#include <cmath>
+#include "funs.h"
+#include "rng.h"
+#include <map>
+#ifdef MPIBART
+#include "mpi.h"
+#endif
+
+using Rcpp::Rcout;
+using namespace arma;
+using namespace Rcpp;
+
+
+
+
+//-------------------------------------------------------------
+// FUNCTION: 	Generates realizations from multivariate normal.
+//-------------------------------------------------------------
+// INPUTS:	   n = sample size
+//				   mu = vector of means
+//				   sigma = covariance matrix
+//-------------------------------------------------------------
+// OUTPUT:	n realizations of the specified MVN.
+//-------------------------------------------------------------
+mat rmvnormArma(int n, vec mu, mat sigma) {
+
+   int ncols = sigma.n_cols;
+   mat Y = randn(n, ncols);
+   mat result = (repmat(mu, 1, n).t() + Y * chol(sigma)).t();
+   return result;
+}
+
+//--------------------------------------------------
+// normal density N(x, mean, variance)
+double pn(double x, double m, double v)
+{
+	double dif = x-m;
+	return exp(-.5*dif*dif/v)/sqrt(2*PI*v);
+}
+
+//--------------------------------------------------
+// draw from discrete distributin given by p, return index
+int rdisc(double *p, RNG& gen)
+{
+
+	double sum;
+	double u = gen.uniform();
+
+    int i=0;
+    sum=p[0];
+    while(sum<u) {
+		i += 1;
+		sum += p[i];
+    }
+    return i;
+}
+
+//--------------------------------------------------
+//evalute tree tr on grid given by xi and write to os
+void grm(tree& tr, xinfo& xi, std::ostream& os)
+{
+	size_t p = xi.size();
+	if(p!=2) {
+		cout << "error in grm, p !=2\n";
+		return;
+	}
+	size_t n1 = xi[0].size();
+	size_t n2 = xi[1].size();
+	tree::tree_cp bp; //pointer to bottom node
+	double *x = new double[2];
+	for(size_t i=0;i!=n1;i++) {
+		for(size_t j=0;j!=n2;j++) {
+			x[0] = xi[0][i];
+			x[1] = xi[1][j];
+			bp = tr.bn(x,xi);
+			os << x[0] << " " << x[1] << " " << bp->getm() << " " << bp->nid() << endl;
+		}
+	}
+	delete[] x;
+}
+
+//--------------------------------------------------
+//does this bottom node n have any variables it can split on.
+bool cansplit(tree::tree_p n, xinfo& xi)
+{
+	int L,U;
+	bool v_found = false; //have you found a variable you can split on
+	size_t v=0;
+	while(!v_found && (v < xi.size())) { //invar: splitvar not found, vars left
+		L=0; U = xi[v].size()-1;
+		n->rg(v,&L,&U);
+		if(U>=L) v_found=true;
+		v++;
+	}
+	return v_found;
+}
+
+//--------------------------------------------------
+//compute prob of a birth, goodbots will contain all the good bottom nodes
+double getpb(tree& t, xinfo& xi, pinfo& pi, tree::npv& goodbots)
+{
+	double pb;  //prob of birth to be returned
+	tree::npv bnv; //all the bottom nodes
+	t.getbots(bnv);
+	for(size_t i=0;i!=bnv.size();i++)
+		if(cansplit(bnv[i],xi)) goodbots.push_back(bnv[i]);
+	if(goodbots.size()==0) { //are there any bottom nodes you can split on?
+		pb=0.0;
+	} else {
+		if(t.treesize()==1) pb=1.0; //is there just one node?
+		else pb=pi.pb;
+	}
+	return pb;
+}
+
+//--------------------------------------------------
+//find variables n can split on, put their indices in goodvars
+void getgoodvars(tree::tree_p n, xinfo& xi,  std::vector<size_t>& goodvars)
+{
+	int L,U;
+	for(size_t v=0;v!=xi.size();v++) {//try each variable
+		L=0; U = xi[v].size()-1;
+		n->rg(v,&L,&U);
+		if(U>=L) goodvars.push_back(v);
+	}
+}
+
+//--------------------------------------------------
+//get prob a node grows, 0 if no good vars, else alpha/(1+d)^beta
+double pgrow(tree::tree_p n, xinfo& xi, pinfo& pi)
+{
+	if(cansplit(n,xi)) {
+		return pi.alpha/pow(1.0+n->depth(),pi.beta);
+	} else {
+		return 0.0;
+	}
+}
+
+//--------------------------------------------------
+//get sufficients stats for all bottom nodes (sy, sy2)
+void allsuff(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, std::vector<sinfo>& sv)
+{
+  // Bottom nodes are written to bnv.
+  // Suff stats for each bottom node are written to elements (each of class sinfo) of sv.
+  // Initialize data structures
+  tree::tree_cp tbn; //the pointer to the bottom node for the current observations.  tree_cp bc not modifying tree directly.
+  size_t ni;         //the  index into vector of the current bottom node
+  double *xx;        //current x
+
+  bnv.clear();      // Clear the bnv variable if any value is already saved there.
+  x.getbots(bnv);   // Save bottom nodes for x to bnv variable.
+
+
+  typedef tree::npv::size_type bvsz;  // Is a better C way to set type.  (tree::npv::size_type) will resolve to an integer,
+   // or long int, etc.  We don't have to know that ahead of time by using this notation.
+  bvsz nb = bnv.size();   // Initialize new var nb of type bvsz for number of bottom nodes, then...
+  sv.resize(nb);          // Re-sizing suff stat vector to have same size as bottom nodes.
+  
+  // need to re-size members of each element of sv
+  for(size_t i = 0; i != bnv.size(); i++){
+    sv[i].n = 0;
+    sv[i].I.clear();
+  }
+
+  // bnmap is a tuple (lookups, like in Python).  Want to index by bottom nodes.
+  std::map<tree::tree_cp,size_t> bnmap;
+  for(bvsz i=0;i!=bnv.size();i++) bnmap[bnv[i]]=i;  // bnv[i]
+  //map looks like
+  // bottom node 1 ------ 1
+  // bottom node 2 ------ 2
+
+
+  // Loop through each observation.  Push each obs x down the tree and find its bottom node,
+  // then index into the suff stat for the bottom node corresponding to that obs.
+  
+  for(size_t i=0;i<di.n;i++) {
+    xx = di.x + i*di.p;  //Index value: di.x is pointer to first element of n*p data vector.  Iterates through each element.
+    tbn = x.bn(xx,xi); // Finds bottom node for this observation
+    ni = bnmap[tbn]; // Maps bottom node to integer index
+    ++(sv[ni].n); // Increment count at this node
+    sv[ni].I.push_back(i);
+  }
+
+}
+
+
+//get counts for all bottom nodes
+std::vector<int> counts(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv)
+{
+  tree::tree_cp tbn; //the pointer to the bottom node for the current observations
+	size_t ni;         //the  index into vector of the current bottom node
+	double *xx;        //current x
+
+	bnv.clear();
+	x.getbots(bnv);
+
+	typedef tree::npv::size_type bvsz;
+//	bvsz nb = bnv.size();
+
+  std::vector<int> cts(bnv.size(), 0);
+
+	std::map<tree::tree_cp,size_t> bnmap;
+	for(bvsz i=0;i!=bnv.size();i++) bnmap[bnv[i]]=i;
+
+	for(size_t i=0;i<di.n;i++) {
+		xx = di.x + i*di.p;
+		//y=di.y[i];
+    //y = di.y[i + k*di.n];
+
+		tbn = x.bn(xx,xi);
+		ni = bnmap[tbn];
+
+    cts[ni] += 1;
+	}
+  return(cts);
+}
+
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi,
+                   dinfo& di,
+                   tree::npv& bnv, //vector of pointers to bottom nodes
+                   int sign)
+{
+  tree::tree_cp tbn; //the pointer to the bottom node for the current observations
+  size_t ni;         //the  index into vector of the current bottom node
+	double *xx;        //current x
+	//double y;          //current y
+
+	typedef tree::npv::size_type bvsz;
+//	bvsz nb = bnv.size();
+
+	std::map<tree::tree_cp,size_t> bnmap;
+	for(bvsz ii=0;ii!=bnv.size();ii++) bnmap[bnv[ii]]=ii; // bnmap[pointer] gives linear index
+
+	xx = di.x + i*di.p;
+	//y=di.y[i];
+  //y = di.y[i + k*di.n];
+
+	tbn = x.bn(xx,xi);
+	ni = bnmap[tbn];
+
+  cts[ni] += sign;
+}
+
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi,
+                   dinfo& di,
+                   std::map<tree::tree_cp,size_t>& bnmap,
+                   int sign)
+{
+  tree::tree_cp tbn; //the pointer to the bottom node for the current observations
+  size_t ni;         //the  index into vector of the current bottom node
+  double *xx;        //current x
+	//double y;          //current y
+  /*
+	typedef tree::npv::size_type bvsz;
+	bvsz nb = bnv.size();
+
+	std::map<tree::tree_cp,size_t> bnmap;
+	for(bvsz ii=0;ii!=bnv.size();ii++) bnmap[bnv[ii]]=ii; // bnmap[pointer] gives linear index
+	*/
+	xx = di.x + i*di.p;
+	tbn = x.bn(xx,xi);
+	ni = bnmap[tbn];
+  cts[ni] += sign;
+}
+
+
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi,
+                   dinfo& di,
+                   std::map<tree::tree_cp,size_t>& bnmap,
+                   int sign,
+                   tree::tree_cp &tbn
+                   )
+{
+  //tree::tree_cp tbn; //the pointer to the bottom node for the current observations
+  size_t ni;         //the  index into vector of the current bottom node
+  double *xx;        //current x
+  //double y;          //current y
+  /*
+	typedef tree::npv::size_type bvsz;
+	bvsz nb = bnv.size();
+
+	std::map<tree::tree_cp,size_t> bnmap;
+	for(bvsz ii=0;ii!=bnv.size();ii++) bnmap[bnv[ii]]=ii; // bnmap[pointer] gives linear index
+	*/
+	xx = di.x + i*di.p;
+	tbn = x.bn(xx,xi);
+	ni = bnmap[tbn];
+
+  cts[ni] += sign;
+}
+
+bool min_leaf(int minct, std::vector<tree>& t, xinfo& xi, dinfo& di) {
+  bool good = true;
+  tree::npv bnv;
+  std::vector<int> cts;
+  int m = 0;
+  for (size_t tt=0; tt<t.size(); ++tt) {
+    cts = counts(t[tt], xi, di, bnv);
+    m = std::min(m, *std::min_element(cts.begin(), cts.end()));
+    if(m<minct) {
+      good = false;
+      break;
+    }
+  }
+  return good;
+}
+
+
+
+//--------------------------------------------------
+//get sufficient stats for children (v,c) of node nx in tree x for outcome k
+// [SKD]: this is used in the birth proposals
+// In birth proposals, we split the node nx in tree x according to cutpoint c of variable v
+//
+
+void getsuff(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr)
+{
+	double *xx;//current x
+
+  
+  sl.n = 0; // counts number of observations in this leaf
+  sl.I.clear(); // index of observations in this leaf
+
+  
+  sr.n = 0; // counts number of observations in this leaf
+  sr.I.clear();
+
+  
+	for(size_t i=0;i<di.n;i++) {
+		xx = di.x + i*di.p; // gets the next x
+		if(nx==x.bn(xx,xi)) { //does the bottom node = xx's bottom node. If so, we want to see if it goes to left or right child
+			if(xx[v] < xi[v][c]) { // xx goes to the left child
+				sl.n++;
+        sl.I.push_back(i);
+			} else { // xx goes to the right child
+				sr.n++;
+        sr.I.push_back(i);
+			}
+		} // closes if checking whether obs i goes to bottom node nx
+	} // closes loop over observations
+}
+
+
+//--------------------------------------------------
+//get sufficient stats for pair of bottom children nl(left) and nr(right) in tree x
+// [SKD] : This is used in the death proposals
+// In death proposal nodes nl and nr in tree x get combined into a single node
+void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr)
+{
+	double *xx;//current x
+	//double y;  //current y
+	sl.n=0;
+  sl.I.clear();
+  //sl.r_p.clear();
+  //sl.r_f.clear();
+  
+  sr.n = 0;
+  sr.I.clear();
+  //sr.r_p.clear();
+  //sr.r_f.clear();
+	
+	for(size_t i=0;i<di.n;i++) {
+		xx = di.x + i*di.p;
+		tree::tree_cp bn = x.bn(xx,xi);
+		if(bn==nl) {
+      sl.n++;
+      sl.I.push_back(i); // add i to the index of the node
+		} // closes if checking if observaiton goes to left child
+		if(bn==nr) {
+      sr.n++; // increment count of observations in this node
+      sr.I.push_back(i); // add i to the index of the node
+		} // closes if checking if observation goes to right child
+	} // closes loop over observations
+}
+
+
+//--------------------------------------------------
+//log of the integrated likelihood
+// this is computed at a single node
+// r_f is the vector of full residuals at that node
+// r_p is vector of partial residuals at that node
+
+/*
+ 
+ Write a new function to compute posterior mean and variance of the mu parameters
+ These figure into the log-integrated-likelihood in a big way
+ when we have to evaluate omega at each x, we will want to avoid re-computing as much as possible
+*/
+
+// Currently this code is written as if we supply the full r_f and r_p vector (which are tracked in di)
+// We need to re-write this so that we need only call si.r_f and si.r_p
+// In doing so we need to change how we iterate over I:
+// set it outside a loop and have the for loop just loop over an integer index and also increment it
+//
+
+//void get_mu_post_param(double &mu_bar, double &V, const arma::mat &Omega, const int n, const std::vector<double> &r_f, const std::vector<double> &r_p, const std::vector<int> &I, dinfo &di, const double sigma0)
+
+void mu_posterior_multi(double &mu_bar, double &V, const arma::mat &Omega, const sinfo &si, const dinfo &di, const double sigma_mu)
+{
+  double* xx;
+  double V_inv = 1.0/(sigma_mu * sigma_mu);
+  mu_bar = 0.0;
+  if(si.n > 0){
+    for(size_t i = 0; i < si.I.size(); i++){
+      xx = di.x + si.I[i]*di.p; // now points to the x values for observation si.I[i]
+      V_inv += Omega(di.k,di.k); // for heteroskedastic this needs to be
+      mu_bar += Omega(di.k, di.k) * di.r_p[si.I[i]]; // alternatively could use *(di.r_p + si.I[i]) or some such
+      for(size_t kk = 0; kk < di.q; kk++){
+        if(kk != di.k) mu_bar += Omega(di.k, kk) * di.r_f[kk + si.I[i] + di.q];
+      }
+    }
+  }
+  V = 1.0/V_inv;
+  mu_bar *= V;
+}
+
+void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinfo &si, const dinfo &di, const double sigma_mu)
+{
+  double* xx;
+  double V_inv = 1.0/(sigma_mu * sigma_mu);
+  mu_bar = 0.0;
+  if(si.n > 0){
+    for(size_t i = 0; i < si.I.size(); i++){
+      xx = di.x + si.I[i]*di.p; // now points to the x values for observation si.I[i]
+      V_inv += omega; // for heteroskedastic this needs to a function of x
+      mu_bar += omega * di.r_p[si.I[i]];
+    }
+  }
+  V = 1.0/V_inv;
+  mu_bar *= V;
+}
+
+/*
+void get_mu_post_param(double &mu_bar, double &V, const arma::mat &Omega, const sinfo &si, const dinfo &di, const double sigma_mu)
+{
+  double* xx;
+  double V_inv = 1.0/(sigma_mu * sigma_mu);
+  mu_bar = 0.0;
+  // if the node contains 0 observations we just default to the prior
+  if(si.n > 0){
+    for(int i = 0; i < si.I.size(); i++){
+      // currently we don't need the x values but for heteroskedastic BART we will need it
+      xx = di.x + si.I[i]*di.p; // points now to the x values of observation I[i]
+      V_inv += Omega(di.k,di.k);
+      mu_bar += Omega(di.k, di.k) * (di.r_p[si.I[i]]); // alternatively could use di.r_p + si.I[i]
+      for(int kk = 0; kk < di.q; kk++){
+        if(kk != di.k) mu_bar += Omega(di.k, kk) * (di.r_f[si.I[i]*di.q + kk]);
+      }
+    }
+  }
+  V = 1.0/V_inv;
+  mu_bar = mu_bar*V;
+}
+*/
+//--------------------------------------------------
+//fit for multiple data points, not by reference.
+void fit(tree& t, xinfo& xi, dinfo& di, double* fv)
+{
+  double *xx;
+  tree::tree_cp bn;
+  for(size_t i=0;i<di.n;i++) {
+    xx = di.x + i*di.p;
+    bn = t.bn(xx,xi);
+    fv[i] = bn->getm();
+  }
+}
+
+
+//--------------------------------------------------
+//partition
+void partition(tree& t, xinfo& xi, dinfo& di, std::vector<size_t>& pv)
+{
+	double *xx;
+	tree::tree_cp bn;
+	pv.resize(di.n);
+	for(size_t i=0;i<di.n;i++) {
+		xx = di.x + i*di.p;
+		bn = t.bn(xx,xi);
+		pv[i] = bn->nid();
+	}
+}
+//--------------------------------------------------
+// draw all the bottom node mu's
+
+void drmu_multi(tree &t, const arma::mat &Omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen)
+{
+  tree::npv bnv;
+  std::vector<sinfo> sv;
+  allsuff(t, xi, di, bnv, sv);
+  
+  double mu_bar = 0.0;
+  double V = 0.0;
+  
+  for(tree::npv::size_type i = 0; i != bnv.size(); i++){
+    mu_bar = 0.0;
+    V = 0.0;
+    
+    mu_posterior_multi(mu_bar, V, Omega, sv[i], di, pi.sigma_mu[di.k]);
+    bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
+    if(bnv[i]->getm() != bnv[i]->getm()){
+      // something went horribly horribly wrong!
+      //for(int ii = 0; ii<di.n;ii++) Rcout << *(di.x + ii*di.p) << " " ;
+      //Rcout << endl << "mu_bar = " << mu_bar << " V = " << V << endl;
+      Rcpp::stop("drmu_failed");
+    }
+  } // closes loop over the vector of bottom nodes
+}
+
+void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen){
+  tree::npv bnv;
+  std::vector<sinfo> sv;
+  allsuff(t, xi, di, bnv, sv);
+  
+  double mu_bar = 0.0;
+  double V = 0.0;
+  for(tree::npv::size_type i = 0; i != bnv.size(); i++){
+    mu_bar = 0.0;
+    V = 0.0;
+    
+    mu_posterior_uni(mu_bar, V, omega, sv[i], di, pi.sigma_mu[di.k]);
+    bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
+    if(bnv[i]->getm() != bnv[i]->getm()){
+      // something went horribly horribly wrong!
+      //for(int ii = 0; ii<di.n;ii++) Rcout << *(di.x + ii*di.p) << " " ;
+      //Rcout << endl << "mu_bar = " << mu_bar << " V = " << V << endl;
+      Rcpp::stop("drmu_failed");
+    }
+  } // closes loop over the vector of bottom nodes
+}
+
+/*
+void drmu(tree& t, arma::mat const &Omega, xinfo& xi, dinfo& di, pinfo& pi, RNG& gen)
+{
+  tree::npv bnv;
+  std::vector<sinfo> sv;
+  allsuff(t, xi, di, bnv, sv);
+  
+  double mu_bar = 0.0;
+  double V = 0.0;
+  
+  for(tree::npv::size_type i = 0; i != bnv.size(); i++){
+    mu_bar = 0.0;
+    V = 0.0;
+
+    get_mu_post_param(mu_bar, V, Omega, sv[i], di, pi.sigma_mu[di.k]);
+    bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
+    if(bnv[i]->getm() != bnv[i]->getm()){ // something went horribly horribly wrong!
+      //for(int ii = 0; ii<di.n;ii++) Rcout << *(di.x + ii*di.p) << " " ;
+      //Rcout << endl << "mu_bar = " << mu_bar << " V = " << V << endl;
+      Rcpp::stop("drmu_failed");
+    }
+  }
+}
+*/
+
+//--------------------------------------------------
+//write cutpoint information to screen
+void prxi(xinfo& xi)
+{
+	cout << "xinfo: \n";
+	for(size_t v=0;v!=xi.size();v++) {
+		cout << "v: " << v << endl;
+		for(size_t j=0;j!=xi[v].size();j++) cout << "j,xi[v][j]: " << j << ", " << xi[v][j] << endl;
+	}
+	cout << "\n\n";
+}
+
+//--------------------------------------------------
+//make xinfo = cutpoints
+void makexinfo(size_t p, size_t n, double *x, xinfo& xi, size_t nc)
+{
+	double xinc;
+
+	//compute min and max for each x
+	std::vector<double> minx(p,INFINITY);
+	std::vector<double> maxx(p,-INFINITY);
+	double xx;
+	for(size_t i=0;i<p;i++) {
+		for(size_t j=0;j<n;j++) {
+			xx = *(x+p*j+i);
+			if(xx < minx[i]) minx[i]=xx;
+			if(xx > maxx[i]) maxx[i]=xx;
+		}
+	}
+	//make grid of nc cutpoints between min and max for each x.
+	xi.resize(p);
+	for(size_t i=0;i<p;i++) {
+		xinc = (maxx[i]-minx[i])/(nc+1.0);
+		xi[i].resize(nc);
+		for(size_t j=0;j<nc;j++) xi[i][j] = minx[i] + (j+1)*xinc;
+	}
+}
+// get min/max needed to make cutpoints
+void makeminmax(size_t p, size_t n, double *x, std::vector<double> &minx, std::vector<double> &maxx)
+{
+	double xx;
+
+	for(size_t i=0;i<p;i++) {
+		for(size_t j=0;j<n;j++) {
+			xx = *(x+p*j+i);
+			if(xx < minx[i]) minx[i]=xx;
+			if(xx > maxx[i]) maxx[i]=xx;
+		}
+	}
+}
+//make xinfo = cutpoints give the minx and maxx vectors
+void makexinfominmax(size_t p, xinfo& xi, size_t nc, std::vector<double> &minx, std::vector<double> &maxx)
+{
+	double xinc;
+	//make grid of nc cutpoints between min and max for each x.
+	xi.resize(p);
+	for(size_t i=0;i<p;i++) {
+		xinc = (maxx[i]-minx[i])/(nc+1.0);
+		xi[i].resize(nc);
+		for(size_t j=0;j<nc;j++) xi[i][j] = minx[i] + (j+1)*xinc;
+	}
+}
+
+// Check if a vector is sorted.  For checking z and zpred for causal funbart.
+bool is_sort(arma::vec x) {
+     int n=x.n_elem;
+     for (int i=0; i<n-1; ++i)
+         if (x[i] < x[i+1]) return false;
+     return true;
+}
+

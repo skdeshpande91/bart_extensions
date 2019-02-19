@@ -66,7 +66,7 @@ Rcpp::List uni_bartFit(arma::vec Y,
   // create pointer for x, y, and x_pred
   double* y_ptr = new double[n];
   double* x_ptr = new double[n_obs*p];
-  double* x_pred_ptr = new double[n_obs*p];
+  double* x_pred_ptr = new double[n_pred*p];
   
   for(size_t i = 0; i < n_obs; i++){
     y_ptr[i] = Y(i);

@@ -37,7 +37,7 @@ void draw_tree(tree& x, xinfo &xi, double alpha, double beta, RNG &gen){
   double unif = 0.0;
   while(flag && counter < 100){
     // find the valid bottom nodes
-    Rcout << "counter = " << counter << endl;
+    //Rcout << "counter = " << counter << endl;
     goodbots.clear();
     prev_max_depth = max_depth;
     
@@ -48,22 +48,22 @@ void draw_tree(tree& x, xinfo &xi, double alpha, double beta, RNG &gen){
       if(cansplit(bnv[i],xi)) goodbots.push_back(bnv[i]);
     }
  
-    Rcout << "goodbots.size() = " << goodbots.size() << endl;
+    //Rcout << "goodbots.size() = " << goodbots.size() << endl;
     if(goodbots.size() > 0){
       for(size_t ni = 0; ni != goodbots.size();ni++){
         dnx = goodbots[ni]->depth(); // depth of (ni)^th bottom node
         if(dnx > max_depth) max_depth = dnx;
       }
-      Rcout << "max_depth = " << max_depth << endl;
+      //Rcout << "max_depth = " << max_depth << endl;
       if(max_depth < prev_max_depth){
-        Rcout << "max_depth is less than prev_max_depth. Something went horribly wrong."<< endl;
+        //Rcout << "max_depth is less than prev_max_depth. Something went horribly wrong."<< endl;
         break;
       } else if(max_depth > 1 + prev_max_depth){
-        Rcout << "max_depth is greater than 1+prev_max_depth. Something went wrong." << endl;
+        //Rcout << "max_depth is greater than 1+prev_max_depth. Something went wrong." << endl;
         break;
       } else if( (max_depth == prev_max_depth) && (max_depth != 0)){
-        Rcout << "max_depth = prev_max_depth = " << prev_max_depth;
-        Rcout << " ... Can't try to grow further." << endl;
+        //Rcout << "max_depth = prev_max_depth = " << prev_max_depth;
+        //Rcout << " ... Can't try to grow further." << endl;
         break;
       } else if( (max_depth == prev_max_depth + 1) || (max_depth == 0)){
         flag = false; // re-set the value of the flag.
@@ -74,28 +74,28 @@ void draw_tree(tree& x, xinfo &xi, double alpha, double beta, RNG &gen){
             goodvars.clear();
             getgoodvars(nx, xi, goodvars); // get the variables we're allowed to split on
             if(goodvars.size() > 0){
-              Rcout << "good var size = " << goodvars.size() ;
+              //Rcout << "good var size = " << goodvars.size() ;
               vi = floor(gen.uniform()*goodvars.size());
               v = goodvars[vi];
-              Rcout << "  v = " << v ;
+              //Rcout << "  v = " << v ;
               L = 0;
               U = xi[v].size()-1;
               nx->rg(v, &L,&U);
               c = L + floor(gen.uniform()*(U-L+1)); // U-L+1 is number of available split points
-              Rcout << "  c = " << c << endl;
+              //Rcout << "  c = " << c << endl;
               PGnx = alpha/pow(1.0 + dnx, beta);
-              Rcout << " dnx = " << dnx << " PGnx = " << PGnx << " unif = ";
+              //Rcout << " dnx = " << dnx << " PGnx = " << PGnx << " unif = ";
               unif = gen.uniform();
               if(unif < PGnx){
-                Rcout << unif << " ... was able to grow this node!" << endl;
+                //Rcout << unif << " ... was able to grow this node!" << endl;
                 flag = true; // we can continue growing the tree in the next iteration
                 // do birth: set mul and mur to zero for now.
                 x.birth(nx->nid(),v,c,0.0,0.0);
               } else{
-                Rcout << unif << " ... unable to grow this node!" << endl;
+                //Rcout << unif << " ... unable to grow this node!" << endl;
               }
             } else{
-              Rcout << "No good variables to split on" << endl;
+              //Rcout << "No good variables to split on" << endl;
               break;
             }
           } // closes if checking whether bottom node nx is at maximum depth
@@ -104,10 +104,4 @@ void draw_tree(tree& x, xinfo &xi, double alpha, double beta, RNG &gen){
     }// closes if checking if goodbots is empty
     counter++;
   } // closes while
-  
-  
-  
-  
-  
-
 }

@@ -7,7 +7,7 @@
 #include "tree.h"
 #include "info.h"
 #include "rng.h"
-#include "GIGrvg.h"
+//#include "GIGrvg.h"
 
 using namespace arma;
 

@@ -24,6 +24,23 @@ public:
 
 };
 
+class dinfo_slfm{
+public:
+  size_t p; // number of variables
+  size_t n; // number of observations
+  size_t q; // number of outcomes
+  size_t d; // index of which basis function we are considering
+  double *x; // j^th var of i^th obs is *(x + p*i+j)
+  double *y; // i^th obs of task k is *(y +q*i + k)
+  double *delta; // track the elements in delta_ptr
+  double *af; // will track all of the elements in allfit
+  double *uf; // will track all of the elements in ufit
+  
+  // constructor
+  dinfo_slfm(){p=0;n=0;q=0;x=0;y=0;af=0;uf=0;}
+};
+
+
 //============================================================
 //prior and mcmc
 //============================================================
@@ -59,7 +76,6 @@ public:
   // constructor
   pinfo(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 1.0;}
 };
-
 
 //============================================================
 //sufficient statistics for 1 node

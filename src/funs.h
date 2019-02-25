@@ -15,7 +15,7 @@ using namespace arma;
 
 inline double logsumexp(const double &a, const double &b){
   return a < b ? b + log(1.0 + exp(a - b)) : a + log(1.0 + exp(b - a));
-}
+};
 
 using std::cout;
 using std::endl;
@@ -68,34 +68,51 @@ void getgoodvars(tree::tree_p n, xinfo& xi, std::vector<size_t>& goodvars);
 //get prob a node grows, 0 if no good vars, else a/(1+d)^b
 double pgrow(tree::tree_p n, xinfo& xi, pinfo& pi);
 //--------------------------------------------------
+// prepare the data
+void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::vec &y_col_max, arma::vec &y_col_min);
+//--------------------------------------------------
 //get sufficients stats for all bottom nodes
 void allsuff(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, std::vector<sinfo>& sv);
+void allsuff(tree& x, xinfo& xi, dinfo_slfm& di, tree::npv& bnv, std::vector<sinfo>& sv); // overloaded for  SLFM
 //void allsuffhet(int k, tree& x, xinfo& xi, dinfo& di, double* phi, tree::npv& bnv, std::vector<sinfo>& sv);
 //--------------------------------------------------
 //get counts for all bottom nodes
 //std::vector<int> counts(int k, tree& x, xinfo& xi, dinfo& di);
 std::vector<int> counts(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv);
+std::vector<int> counts(tree &x, xinfo &xi, dinfo_slfm &di, tree::npv &bnv);
 //--------------------------------------------------
 //update counts (inc or dec) to reflect observation i
 // deprecated:
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo& di, int sign);
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, int sign);
+void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, int sign);
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, int sign); //overloaded version for SLFM
 
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo& di, std::map<tree::tree_cp,size_t>& bnmap, int sign);
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo& di, std::map<tree::tree_cp,size_t>& bnmap, int sign, tree::tree_cp &tbn);
+void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, tree::npv &bnv, int sign);
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, tree::npv& bnv, int sign); //overloaded version for SLFM
+
+
+void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, std::map<tree::tree_cp,size_t>& bnmap, int sign);
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, std::map<tree::tree_cp,size_t>& bnmap, int sign); // overloaded version for SLFM
+
+void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, std::map<tree::tree_cp,size_t>& bnmap, int sign, tree::tree_cp &tbn);
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, std::map<tree::tree_cp,size_t>& bnmap, int sign, tree::tree_cp &tbn); // overloaded version for SLFM
+
+
 
 //--------------------------------------------------
 //check minimum leaf size
 bool min_leaf(int minct, std::vector<tree>& t, xinfo& xi, dinfo& di);
+bool min_leaf(int minct, std::vector<tree>& t, xinfo& xi, dinfo_slfm& di); // overloaded for SLFM
 //--------------------------------------------------
 //get sufficient stats for children (v,c) of node nx in tree x
 //[SKD]: used in the birth proposals
 void getsuff(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr);
+void getsuff(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo&xi, dinfo_slfm& di, sinfo& sl, sinfo& sr); // overloaded for SLFM
 //void getsuffhet(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo& di, double* phi, sinfo& sl, sinfo& sr);
 //--------------------------------------------------
 //get sufficient stats for pair of bottom children nl(left) and nr(right) in tree x
 //[SKD]: used in the death proposals
 void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr);
+void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo_slfm& di, sinfo& sl, sinfo& sr); // for SLFM
 //void getsuffhet(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, double* phi, sinfo& sl, sinfo& sr);
 
 //--------------------------------------------------
@@ -105,8 +122,7 @@ void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, 
 // for fully multivariate method we need to entire matrix Omega
 void mu_posterior_multi(double &mu_bar, double &V, const arma::mat &Omega, const sinfo &si, const dinfo &di, const double sigma_mu);
 void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinfo &si, const dinfo &di, const double sigma_mu);
-
-//void get_mu_post_param(double &mu_bar, double &V, const arma::mat &Omega, const sinfo &si, const dinfo &di, const double sigma_mu);
+void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, const sinfo &si, const dinfo_slfm &di, const double sigma_mu); // for SLFM
 
 
 //--------------------------------------------------
@@ -115,6 +131,7 @@ void fit(tree& t, xinfo& xi, dinfo& di, std::vector<double>& fv);
 //--------------------------------------------------
 //fit
 void fit(tree& t, xinfo& xi, dinfo& di, double* fv);
+void fit(tree& t, xinfo& xi, dinfo_slfm& di, double* fv); // for SLFM
 
 template<class T>
 double fit_i(T i, tree& t, xinfo& xi, dinfo& di)

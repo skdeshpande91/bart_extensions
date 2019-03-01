@@ -2,7 +2,7 @@ library(Rcpp)
 library(RcppArmadillo)
 
 source("scripts/makeCutpoints.R")
-n <- 10
+n <- 100
 p <- 2
 q <- 3
 X <- matrix(runif(n*p, -1, 1), n, p)

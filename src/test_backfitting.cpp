@@ -188,6 +188,7 @@ Rcpp::List test_backfitting(arma::mat Y,
   double V = 0.0;
   // draw a tree now
   size_t t = 0; // only work with the first tree
+  double mh_prob = 0.0;
   for(size_t d = 0; d < 1; d++){
     di.d = d;
     // draw a tree
@@ -199,18 +200,28 @@ Rcpp::List test_backfitting(arma::mat Y,
     tree::npv bnv;
     std::vector<sinfo> sv;
     allsuff(t_vec[d][t], xi, di, bnv, sv);
-    Rcpp::Rcout << "Got sufficient statistics for each terminal node" << endl;
+    //Rcpp::Rcout << "Got sufficient statistics for each terminal node" << endl;
     for(size_t l = 0; l < bnv.size(); l++){
-      Rcpp::Rcout << "  terminal node " << l << " contains :" << endl;
-      for(size_t ii = 0; ii < sv[l].n; ii++){
-        Rcpp::Rcout << " " << sv[l].I[ii];
-      }
-      Rcpp::Rcout << endl;
+    //  Rcpp::Rcout << "  terminal node " << l << " contains :" << endl;
+    //  for(size_t ii = 0; ii < sv[l].n; ii++){
+    //    Rcpp::Rcout << " " << sv[l].I[ii];
+    //  }
+    //  Rcpp::Rcout << endl;
       
       mu_posterior_slfm(mu_bar, V, Phi, sigma, sv[l], di, pi.sigma_mu[d]);
-      Rcpp::Rcout << "M = " << mu_bar << "  V = " << V << endl;
-      
+      //Rcpp::Rcout << "M = " << mu_bar << "  V = " << V << endl;
     }
+    
+    // try a birth-death move
+    Rcpp::Rcout << "Before trying birth/death move" << endl;
+    t_vec[d][t].pr(true);
+    Rcpp::Rcout << endl;
+    mh_prob = bd_slfm(t_vec[d][t], Phi, sigma, xi, di, pi, gen);
+    Rcpp::Rcout << "  mh_prob = " << mh_prob << endl;
+    t_vec[d][t].pr(true);
+    
+    
+    
   }
   
   

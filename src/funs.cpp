@@ -526,7 +526,7 @@ bool min_leaf(int minct, std::vector<tree>& t, xinfo& xi, dinfo_slfm& di) {
 // In birth proposals, we split the node nx in tree x according to cutpoint c of variable v
 //
 
-void getsuff(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr)
+void getsuff(tree &x, tree::tree_cp nx, size_t v, size_t c, xinfo &xi, dinfo &di, sinfo &sl, sinfo &sr)
 {
 	double *xx;//current x
   sl.n = 0; // counts number of observations in this leaf
@@ -547,7 +547,7 @@ void getsuff(tree& x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo& di
 	} // closes loop over observations
 }
 
-void getsuff(tree&x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo_slfm& di, sinfo& si, sinfo &sl, sinfo& sr)
+void getsuff(tree &x, tree::tree_cp nx, size_t v, size_t c, xinfo &xi, dinfo_slfm &di, sinfo &sl, sinfo &sr)
 {
   double *xx;
   sl.n = 0; // counts number of observations in the left child leaf
@@ -572,7 +572,7 @@ void getsuff(tree&x, tree::tree_cp nx, size_t v, size_t c, xinfo& xi, dinfo_slfm
 //get sufficient stats for pair of bottom children nl(left) and nr(right) in tree x
 // [SKD] : This is used in the death proposals
 // In death proposal nodes nl and nr in tree x get combined into a single node
-void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, sinfo& sl, sinfo& sr)
+void getsuff(tree &x, tree::tree_cp nl, tree::tree_cp nr, xinfo &xi, dinfo &di, sinfo &sl, sinfo &sr)
 {
 	double *xx;//current x
 	//double y;  //current y
@@ -594,7 +594,7 @@ void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo& di, 
 	} // closes loop over observations
 }
 
-void getsuff(tree& x, tree::tree_cp nl, tree::tree_cp nr, xinfo& xi, dinfo_slfm& di, sinfo& sl, sinfo& sr)
+void getsuff(tree &x, tree::tree_cp nl, tree::tree_cp nr, xinfo &xi, dinfo_slfm &di, sinfo &sl, sinfo &sr)
 {
   double *xx; // current x
   sl.n = 0;
@@ -658,20 +658,20 @@ void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arm
   double V_inv = 1.0/(sigma_mu * sigma_mu);
   double r = 0.0; // the residual
   mu_bar = 0.0;
-  V = 1/V_inv;
   if(si.n > 0){ // only update if there are observations at the terminal node
     for(size_t i = 0; i < si.I.size(); i++){ // note we need to use si.I[i] in the computations
-      Rcpp::Rcout << "  obseration " << si.I[i] << endl;
-      xx = di.x + si.I[i]*di.p; // now points to the xvalues for observation si.I[i]
+      //Rcpp::Rcout << "  observation " << si.I[i] << endl;
+      xx = di.x + si.I[i]*di.p; // now points to the xvalues for observation si.I[i]. This isn't needed here.
       for(size_t k = 0; k < di.q; k++){
-        Rcpp::Rcout << "    k = " << k ;
+        //Rcpp::Rcout << "    k = " << k ;
         if(di.delta[k + si.I[i]*di.q] == 1){ // we actually observe observation i, task k
           V_inv += Phi(k,di.d) * Phi(k, di.d) /(sigma(k) * sigma(k));
-          r = di.y[k + si.I[i]*di.q] - di.af[k + si.I[i]*di.q]; // residual
-          Rcpp::Rcout << " r = " << r << endl;
+          // note that af currently contains the fit of every tree but tree t in basis function d
+          r = di.y[k + si.I[i]*di.q] - di.af[k + si.I[i]*di.q]; // partial residual
+          //Rcpp::Rcout << " r = " << r << endl;
           mu_bar += Phi(k, di.d) * r/(sigma(k) * sigma(k));
         } else{
-          Rcpp::Rcout << " observation missing. skipping this!" << endl;
+          //Rcpp::Rcout << " observation missing. skipping this!" << endl;
         } // closes if checking that observation i is available for task k
       }// closes loop over tasks
     } // closes loop over observations

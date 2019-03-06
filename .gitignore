@@ -5,3 +5,8 @@
 .RData
 *.o
 src/*.o
+latex/*.aux
+latex/*.blg
+latex/*.out
+latex/*.synctex.gz
+

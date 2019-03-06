@@ -90,10 +90,8 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   arma::mat Phi = arma::ones<arma::mat>(q,D); // Phi(k,d) tells us how much u_d contribute to f_k
   arma::vec sigma = arma::ones<arma::vec>(q); // sigma(k) is the residual SD for task k
   
-  
-
   // set up prior hyper-parameters
-  pinfo pi;
+  pinfo_slfm pi;
   pi.pbd = 1.0; // probability of a birth/death move
   pi.pb = 0.5; // probability of a birth move given birth/death move occurs
   pi.alpha = 0.95;
@@ -101,26 +99,47 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   pi.sigma_mu.clear(); // prior sd of the mu parameters for each tree in the D basis functions
   pi.sigma_mu.reserve(D);
   
-  pi.sigma_hat.clear(); // over-estimate of the residual variance for each task
+  pi.sigma_phi.clear(); // prior sd of the Phi parameters
+  pi.sigma_phi.reserve(q); // we model the *rows* of Phi independently, each row has slightly different variance term to be consistent with data
+  
+  pi.sigma_hat.clear(); // over-estimate of the residual variance for each task. usually will just be 1.
   pi.sigma_hat.reserve(q);
   
   pi.lambda.clear(); // scaling value for the scaled-inverse chi-square prior on residual variances
   pi.lambda.reserve(q);
   pi.nu = nu; // df of the scaled-inverse chi-square prior on residual variances
   
+  
+  for(size_t d = 0; d < D; d++){
+    pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( ((double) m) * ((double) D)));
+  }
+  
+  // now set sigma_phi. This requires calling the qchisq function from R
   double chisq_quantile = 0.0;
   Function qchisq("qchisq");
-  NumericVector tmp_quantile = qchisq(Named("p") = 1.0 - var_prob, Named("df") = nu);
+  //NumericVector tmp_quantile = qchisq(Named("p") = 1.0 - var_prob, Named("df") = nu);
+  NumericVector tmp_quantile = qchisq(Named("p") = var_prob, Named("df") = D);
   chisq_quantile = tmp_quantile[0];
-  for(size_t d = 0; d < D; d++){
-    pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( (double) m));
+  for(size_t k = 0; k < q; k++){
+    pi.sigma_phi[k] = sqrt( ((double) D)/chisq_quantile ) * (y_col_max(k) - y_col_min(k))/(y_col_max.max() - y_col_min.min());
   }
+  // now set sigma_hat and lambda
+  tmp_quantile = qchisq(Named("p") = 1 - var_prob, Named("df") = nu);
+  chisq_quantile = tmp_quantile[0];
+
   for(size_t k = 0; k < q; k++){
     pi.sigma_hat[k] = 1.0; // every column has variance 1
     pi.lambda[k] = chisq_quantile/nu;
   }
   Rcpp::Rcout << "Finished setting pi" << endl;
   
+  Rcpp::Rcout << "  pi.sigma_mu:" ;
+  for(size_t d = 0; d < D; d++) Rcpp::Rcout << " " << pi.sigma_mu[d] ;
+  Rcpp::Rcout << endl;
+  
+  Rcpp::Rcout << "  pi.sigma_phi:";
+  for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " <<  pi.sigma_phi[k];
+  Rcpp::Rcout << endl;
   
   Rcpp::Rcout << "  pi.sigma_hat:" ;
   for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.sigma_hat[k] ;
@@ -129,12 +148,7 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   Rcpp::Rcout << "  pi.lambda:" ;
   for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.lambda[k] ;
   Rcpp::Rcout << endl;
-  
-  Rcpp::Rcout << "  pi.sigma_mu:" ;
-  for(size_t d = 0; d < D; d++){
-    Rcpp::Rcout << " " << pi.sigma_mu[d] ;
-  }
-  Rcpp::Rcout << endl;
+
   // [SKD]: If done correctly, pi.sigma_hat is 1 for every outcome, pi.lambda is constant, and pi.sigma_mu constant
   
   // Set up trees, data, and residuals
@@ -165,12 +179,13 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   di.p = p;
   di.n = n_obs;
   di.q = q;
+  di.D = D;
   di.d = 0;
   di.x = &x_ptr[0];
   di.y = &y_ptr[0];
   di.delta = &delta_ptr[0];
   di.af = &allfit[0];
-  di.uf = &allfit[0];
+  di.uf = &ufit[0];
   
   dinfo_slfm dip;
   dip.p = p;
@@ -202,8 +217,8 @@ Rcpp::List slfm_bartFit(arma::mat Y,
     else if( (iter > burn & iter%50 == 0) || (iter == burn)) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" << endl;
     if(iter%100 == 0) Rcpp::checkUserInterrupt();
     
-    
-    // update the basis functions
+    // update the trees within each basis functions.
+
     for(size_t d = 0; d < D; d++){
       di.d = d; // in di, this lets us track which basis function we are updating
       for(size_t t = 0; t < m; t++){
@@ -217,10 +232,10 @@ Rcpp::List slfm_bartFit(arma::mat Y,
         } // closes loop over observations
         // we are now ready to perform the birth/death move and then update the parameters
         
-        //bd_slfm();
-        //drmu_slfm();
+        bd_slfm(t_vec[d][t], Phi, sigma, xi, di, pi, gen);
+        drmu_slfm(t_vec[d][t], Phi, sigma, xi, di, pi, gen);
         
-        // now we recompute the fit
+        // now that we have new tree, we need to adjust ufit and allfit, since we had removed fit from this tree earlier
         fit(t_vec[d][t], xi, di, ftemp);
         for(size_t i = 0; i < n_obs; i++){
           if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp!");
@@ -229,16 +244,26 @@ Rcpp::List slfm_bartFit(arma::mat Y,
             allfit[k + i*q] += Phi(k,d) * ftemp[i]; // add back fit of tree t, basis function d to allfit
           } // closes loop over tasks
         } // closes loop over obesrvations for updating allfit and ufit
-        
       } // closes loop over the trees within basis function d
     } // closes loop over the basis functions
     
-    // update loadings Phi
-    // update_phi(Phi, di, pi);
+    // update the loadings Phi
+    update_Phi_gaussian(Phi, sigma, di, pi, gen);
+
+    // now that we have updated both the basis functions and the trees, we should update allfit
+    for(size_t i = 0; i < n_obs; i++){
+      for(size_t k = 0; k < q; k++){
+        allfit[k + i*q] = 0.0;
+        for(size_t d = 0; d < D; d++){
+          allfit[k + i*q] += Phi(k,d) * ufit[d + i*D];
+        } // closes loops over the basis functions
+      } // closes loop over the tasks
+    } // closes loop over observations
     
-    // update the sigma^2
+    // !! allfit has been updated
     
-    
+    // update the residual variances
+    update_sigma(Phi, sigma, di, pi, gen);
     // Now collect all of the parameters
     if(iter >= burn){
       for(size_t k = 0; k < q; k++){

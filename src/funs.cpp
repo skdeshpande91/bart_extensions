@@ -99,7 +99,7 @@ bool cansplit(tree::tree_p n, xinfo& xi)
 
 //--------------------------------------------------
 //compute prob of a birth, goodbots will contain all the good bottom nodes
-double getpb(tree& t, xinfo& xi, pinfo& pi, tree::npv& goodbots)
+double getpb(tree &t, xinfo &xi, pinfo &pi, tree::npv &goodbots)
 {
 	double pb;  //prob of birth to be returned
 	tree::npv bnv; //all the bottom nodes
@@ -113,6 +113,22 @@ double getpb(tree& t, xinfo& xi, pinfo& pi, tree::npv& goodbots)
 		else pb=pi.pb;
 	}
 	return pb;
+}
+
+double getpb(tree &t, xinfo &xi, pinfo_slfm &pi, tree::npv &goodbots)
+{
+  double pb;  //prob of birth to be returned
+  tree::npv bnv; //all the bottom nodes
+  t.getbots(bnv);
+  for(size_t i=0;i!=bnv.size();i++)
+    if(cansplit(bnv[i],xi)) goodbots.push_back(bnv[i]);
+  if(goodbots.size()==0) { //are there any bottom nodes you can split on?
+    pb=0.0;
+  } else {
+    if(t.treesize()==1) pb=1.0; //is there just one node?
+    else pb=pi.pb;
+  }
+  return pb;
 }
 
 //--------------------------------------------------
@@ -129,13 +145,22 @@ void getgoodvars(tree::tree_p n, xinfo& xi,  std::vector<size_t>& goodvars)
 
 //--------------------------------------------------
 //get prob a node grows, 0 if no good vars, else alpha/(1+d)^beta
-double pgrow(tree::tree_p n, xinfo& xi, pinfo& pi)
+double pgrow(tree::tree_p n, xinfo &xi, pinfo &pi)
 {
 	if(cansplit(n,xi)) {
 		return pi.alpha/pow(1.0+n->depth(),pi.beta);
 	} else {
 		return 0.0;
 	}
+}
+
+double pgrow(tree::tree_p n, xinfo &xi, pinfo_slfm &pi)
+{
+  if(cansplit(n,xi)) {
+    return pi.alpha/pow(1.0+n->depth(),pi.beta);
+  } else {
+    return 0.0;
+  }
 }
 
 // pre-process the observed data y
@@ -652,7 +677,7 @@ void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinf
   mu_bar *= V;
 }
 
-void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, const sinfo &si, const dinfo_slfm &di, const double sigma_mu)
+void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, sinfo &si, dinfo_slfm &di, double sigma_mu)
 {
   double* xx;
   double V_inv = 1.0/(sigma_mu * sigma_mu);
@@ -766,6 +791,25 @@ void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG
   } // closes loop over the vector of bottom nodes
 }
 
+void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen)
+{
+  tree::npv bnv;
+  std::vector<sinfo> sv;
+  allsuff(t, xi, di, bnv, sv);
+  
+  double mu_bar = 0.0;
+  double V = 0.0;
+  for(tree::npv::size_type i = 0; i != bnv.size(); i++){
+    mu_bar = 0.0;
+    V = 0.0;
+    mu_posterior_slfm(mu_bar, V, Phi, sigma, sv[i], di, pi.sigma_mu[di.d]);
+    bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
+    if(bnv[i]->getm() != bnv[i]->getm()){
+      Rcpp::stop("drmu failed: nan in terminal node");
+    }
+  } // closes loop over the vector of bottom nodes of tree t
+}
+
 
 //--------------------------------------------------
 //write cutpoint information to screen
@@ -838,3 +882,53 @@ bool is_sort(arma::vec x) {
      return true;
 }
 
+// Function to update Phi
+void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi,  RNG &gen)
+{
+  
+  double r = 0.0; // partial residual. may not need to track the entire array of partial residuals
+  double mu_phi = 0.0;
+  double V_phi = 0.0;
+  double V_phi_inv = 0.0;
+  for(int k = 0; k < di.q; k++){
+    for(int d = 0; d < di.D; d++){
+      mu_phi = 0.0;
+      V_phi_inv = 1.0/(pi.sigma_phi[k] * pi.sigma_phi[k]);
+      for(int i = 0; i < di.n; i++){
+        if(di.delta[k + i*di.q] == 1){ // check that we observe task k for observation i
+          r = di.y[k + i*di.q];
+          for(int dd = 0; dd < di.D; dd++){
+            if(dd != d){
+              r -= Phi(k,dd) * di.uf[dd + i * di.D];
+            }
+          }
+          // at this point r contains the current partial residual based on the fit all other (d-1) basis functions.
+          // note that we cannot use allfit here because it is based on the previous version of Phi
+          mu_phi += r/(sigma(k) * sigma(k));
+          V_phi_inv += (di.uf[d + i*di.D] * di.uf[d + i*di.D])/(sigma(k) * sigma(k));
+        }
+      } // closes loop over the observations i
+      V_phi = 1.0/V_phi_inv;
+      mu_phi *= V_phi;
+      Phi(k,d) = mu_phi + sqrt(V_phi) * gen.normal(); // draw from the appropriate normal distribution
+    } // closes loop over the basis functions
+  } // closes loop over the tasks
+  
+}
+
+void update_sigma(const arma::mat &Phi, arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen)
+{
+  double s = 0.0;
+  int n = 0;
+  for(size_t k = 0; k < di.q; k++){
+    n = 0;
+    s = 0.0;
+    for(size_t i = 0; i < di.n; i++){
+      if(di.delta[k + i*di.q] == 1){
+        n++;
+        s += (di.y[k + i*di.q] - di.af[k + i*di.q]) * (di.y[k + i*di.q] - di.af[k + i*di.q]);
+      }
+    }
+    sigma(k) = sqrt((pi.nu * pi.lambda[k] + s)/gen.chi_square(pi.nu + n));
+  } //closes loop over the tasks
+}

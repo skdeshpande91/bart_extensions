@@ -60,13 +60,16 @@ void grm(tree& tr, xinfo& xi, std::ostream& os);
 bool cansplit(tree::tree_p n, xinfo& xi);
 //--------------------------------------------------
 //compute prob of a birth, goodbots will contain all the good bottom nodes
-double getpb(tree& t, xinfo& xi, pinfo& pi, tree::npv& goodbots);
+double getpb(tree &t, xinfo &xi, pinfo &pi, tree::npv &goodbots);
+double getpb(tree &t, xinfo &xi, pinfo_slfm &pi, tree::npv &goodbots); // overloaded for SLFM
 //--------------------------------------------------
 //find variables n can split on, put their indices in goodvars
 void getgoodvars(tree::tree_p n, xinfo& xi, std::vector<size_t>& goodvars);
 //--------------------------------------------------
 //get prob a node grows, 0 if no good vars, else a/(1+d)^b
-double pgrow(tree::tree_p n, xinfo& xi, pinfo& pi);
+double pgrow(tree::tree_p n, xinfo &xi, pinfo &pi);
+double pgrow(tree::tree_p n, xinfo &xi, pinfo_slfm &pi);// overloaded for SLFM
+
 //--------------------------------------------------
 // prepare the data
 void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::vec &y_col_max, arma::vec &y_col_min);
@@ -79,15 +82,15 @@ void allsuff(tree& x, xinfo& xi, dinfo_slfm& di, tree::npv& bnv, std::vector<sin
 //get counts for all bottom nodes
 //std::vector<int> counts(int k, tree& x, xinfo& xi, dinfo& di);
 std::vector<int> counts(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv);
-std::vector<int> counts(tree &x, xinfo &xi, dinfo_slfm &di, tree::npv &bnv);
+std::vector<int> counts(tree &x, xinfo &xi, dinfo_slfm &di, tree::npv &bnv); // overloaded for SLFM
 //--------------------------------------------------
 //update counts (inc or dec) to reflect observation i
 // deprecated:
 void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, int sign);
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, int sign); //overloaded version for SLFM
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, int sign); //overloaded for SLFM
 
 void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, tree::npv &bnv, int sign);
-void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, tree::npv& bnv, int sign); //overloaded version for SLFM
+void update_counts(int i, std::vector<int>& cts, tree& x, xinfo& xi, dinfo_slfm &di, tree::npv& bnv, int sign); //overloaded for SLFM
 
 
 void update_counts(int i, std::vector<int> &cts, tree &x, xinfo &xi, dinfo &di, std::map<tree::tree_cp,size_t>& bnmap, int sign);
@@ -123,8 +126,7 @@ void getsuff(tree &x, tree::tree_cp nl, tree::tree_cp nr, xinfo &xi, dinfo_slfm 
 // for fully multivariate method we need to entire matrix Omega
 void mu_posterior_multi(double &mu_bar, double &V, const arma::mat &Omega, const sinfo &si, const dinfo &di, const double sigma_mu);
 void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinfo &si, const dinfo &di, const double sigma_mu);
-void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, const sinfo &si, const dinfo_slfm &di, const double sigma_mu); // for SLFM
-
+void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, sinfo &si, dinfo_slfm &di, double sigma_mu); //for SLFM
 
 //--------------------------------------------------
 //fit
@@ -188,7 +190,7 @@ void partition(tree& t, xinfo& xi, dinfo& di, std::vector<size_t>& pv);
 
 void drmu_multi(tree &t, const arma::mat  &Omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
 void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
-
+void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
 
 //--------------------------------------------------
 //write cutpoint information to screen
@@ -200,6 +202,14 @@ void makexinfo(size_t p, size_t n, double *x, xinfo& xi, size_t nc);
 void makeminmax(size_t p, size_t n, double *x, std::vector<double> &minx, std::vector<double> &maxx);
 //make xinfo = cutpoints given minx/maxx vectors
 void makexinfominmax(size_t p, xinfo& xi, size_t nc, std::vector<double> &minx, std::vector<double> &maxx);
+
+
+// Functions to update Phi in SLFM
+void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
+
+// Function to update sigma in SLFM
+void update_sigma(const arma::mat &Phi, arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
+
 
 //--------------------------------------------------
 // Check if a vector is sorted.  For checking z and zpred for causal funbart.

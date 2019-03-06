@@ -1,3 +1,4 @@
 ## bart_extensions
 
-Repo will contain source code for a few extensions of BART, specifically for regression problems with multiple outputs.
+This repo contains various multi-output BART extensions.
+Currently contains code for a semi-parametric latent factor model that draws its basis elements from BART priors.

@@ -542,7 +542,7 @@ double bd_uni(tree &x, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG
   } // closes else for the death proposal
 }
 
-double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo &pi, RNG &gen)
+double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen)
 {
   tree::npv goodbots;  //nodes we could birth at (split on)
   double PBx = getpb(x,xi,pi,goodbots);  //prob of a birth at x

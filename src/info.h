@@ -29,6 +29,7 @@ public:
   size_t p; // number of variables
   size_t n; // number of observations
   size_t q; // number of outcomes
+  size_t D; // number of basis functions
   size_t d; // index of which basis function we are considering
   double *x; // j^th var of i^th obs is *(x + p*i+j)
   double *y; // i^th obs of task k is *(y +q*i + k)
@@ -37,7 +38,7 @@ public:
   double *uf; // will track all of the elements in ufit
   
   // constructor
-  dinfo_slfm(){p=0;n=0;q=0;x=0;y=0;af=0;uf=0;}
+  dinfo_slfm(){p=0;n=0;q=0;D = 0; d = 0;x=0;y=0;af=0;uf=0;}
 };
 
 
@@ -75,6 +76,25 @@ public:
   double nu;
   // constructor
   pinfo(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 1.0;}
+};
+
+
+class pinfo_slfm
+{
+public:
+  double pbd; // prob of birth/death
+  double pb; // prob of birth
+  double alpha;
+  double beta;
+  
+  std::vector<double> sigma_mu; // std deviation of mu prior
+  std::vector<double> sigma_phi; // std deviation of the phi prior
+  std::vector<double> sigma_hat; // initial over-estimate of residual variances for each task
+  std::vector<double> lambda; // scaling parameter for the prior on residuals variance
+  double nu; // degrees of freedom for the prior on residuals variances
+  
+  // constructor
+  pinfo_slfm(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_phi = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 3.0;}
 };
 
 //============================================================

@@ -237,6 +237,7 @@ We note that larger choices of $\sigma^{2}_{\phi,k}$ induce \textit{less} regula
 Note that under this simple prior specification, each task $f_{k}$ depends on every basis function $u_{d},$ and therefore each of the tasks are \textit{a priori} correlated.
 In some situations, this may be overly restrictive or unrealistic. 
 A more flexible option that can adapt to the situation that some of the tasks are uncorrelated is to use a sparsity inducing prior on the elements of $\Phi.$
+\textcolor{blue}{[skd]: Another motivation: the cross-covariances depend on a matrix of rank $\min\left\{D,q\right\}$. We could want adaptivity}
 Specifically, we can introduce binary indicators $\gamma_{k,d}$ and model 
 \begin{align*}
 \phi_{k,d} | \gamma_{k,d} &\sim \gamma_{k,d}N(0,\sigma^{2}_{\phi,k}) + (1 - \gamma_{k,d})\delta_{0} \\
@@ -440,6 +441,56 @@ $$
 \sigma^{2}_{k} | \by, \bu, \Phi \sim \text{Inv. Gamma}\left(\frac{\nu + \sum{\delta_{i,k}}}{2}, \frac{\nu\lambda_{k} + \sum{\delta_{i,k}(y_{i,k} - \Phi\bu(\bx_{i}))^{2}}}{2}\right)
 $$
 
+
+\section{Illustration}
+
+To illustrate the proposed procedure, consider the following toy dataset with $n = 1000, p = 2$ and $q = 2.$
+The predictors $X_{1}, X_{2}$ were both drawn uniformly from the unit interval.
+We drew each $\phi_{k,d} \sim N(0,5^{2})$ and took the true latent basis functions to be
+\begin{align*}
+u_{1}(x_{1},x_{2}) &= 5x_{1}^{2} \\
+u_{2}(x_{1},x_{2}) &= 3x_{1} + (2 - 5\times \mathbf{1}(x_{2} > 0.5))\sin\left(\pi x_{1}\right) - 2 \times \mathbf{1}(x_{2} > 0.5)
+\end{align*}
+Finally, we generate the observed data by adding $N(0,0.75^{2})$ and $N(0, 0.5^{2})$ to the first and second tasks, respectively.
+Figure~\ref{fig:toy_example_data} shows $\bu$ and $\bf$, along with the observed data.
+Because $u_{2}$ depends on $x_{2}$ only through the indicator $\mathbf{1}(x_{2} > 0.5),$ both tasks $f_{1}$ and $f_{2}$ depend on $x_{2}$ only through this indicator as well.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width = 0.7\textwidth]{../images/toy_example_data.png}
+\caption{Toy dataset}
+\label{fig:toy_example_data}
+\end{figure}
+
+To set up a baseline for our method, we fit separate BART regressions for each task using the \citet{Chipman2010} defaults.
+Figure~\ref{fig:toy_sepBART_fit} summarizes the performance of running separate BART regressions for each task.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width = 0.7\textwidth]{../images/toy_sepBART_fit.png}
+\caption{Performance of separate BART fits on toy data}
+\label{fig:toy_sepBART_fit}
+\end{figure}
+
+\textit{A more complicated example}
+
+One that is harder to visualize would involve many more complicated functions.
+
+% maybe also some of the friedman function stuff
+% include like a max, logarithm, maybe generate something from a GP with SE x Periodic kernel. 
+% Then generate data from the Engelhardt group
+
+
+\subsection{Missing observations}
+Above, we formulated our procedure with an eye towards missing data.
+In this experiment we consider varying the amount of missing data from each task.
+
+%We can also consider a slightly more complicated two-dimensional example.
+%We begin with 
+%\begin{align*}
+%u_{1}(x_{1},x_{2}) &= 3(x_{1} - x_{2})^{2} \times \max\left\{x_{1},x_{2}\right\} \\
+%u_{2}(x_{1},x_{2}) &= 3x_{1} + (2 - 3
+%\end{align*}
 
 
 \newpage

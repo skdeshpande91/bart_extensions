@@ -9,4 +9,5 @@ latex/*.aux
 latex/*.blg
 latex/*.out
 latex/*.synctex.gz
+data/*.RData
 

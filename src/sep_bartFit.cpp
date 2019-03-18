@@ -160,9 +160,11 @@ List sep_bartFit(arma::mat Y,
   std::vector<std::vector<tree> > t_vec(q, std::vector<tree>(m));
   
   double* allfit = new double[n];
+  double* allfit_pred = new double[n_pred * q];
   double* r_full = new double[n]; // r_full[k + i*q] is full residual of observation i, outcome k
   double* r_partial = new double[n_obs]; // partial residual for observation i is r_partial[i]
   double* ftemp = new double[n_obs]; // temporarily holds current fit of a specific tree
+  double* ftemp_pred = new double[n_pred];
   
   double ybar = 0.0;
   for(size_t k = 0; k < q; k++){
@@ -198,17 +200,10 @@ List sep_bartFit(arma::mat Y,
   
   Rcpp::Rcout << "initialized pointers for residuals" << endl;
 
-  
-  // We run the main procedure using the centered and scaled responses
-  // std_fit_samples holds the fits for the centered and scaled data
-  // fit_samples will re-scale and then re-center back to the original scale of the data
-  // For Omega we need to convert back to the original scale. Each std_sigma_(k,k') must be multiplied by the original
-  // standard deviation of Y_k and Y_k'.
-  
   // Samples
-  arma::cube std_fit_samples = zeros<cube>(n_obs, q, nd);
-  arma::cube fit_samples = zeros<cube>(n_obs, q, nd); // fit_samples(i,k,iter) = std_fit_samples(i,k,iter) * y_col_sd(k) + y_col_mean(k)
-  arma::cube std_Omega_samples = zeros<cube>(q,q,nd); // Omega samples on the standardized scale
+  arma::cube train_samples = zeros<cube>(n_obs, q, nd); // train_samples(i,k,iter) = allfit[k + i*q] * y_col_sd(k) + y_col_mean(k);
+  arma::cube test_samples = zeros<cube>(n_pred, q, nd); // test_samples(i,k,iter) = allfit_pred[k+i*q] * y_col_sd(k) + y_col_mean(k)
+  //arma::cube std_Omega_samples = zeros<cube>(q,q,nd); // Omega samples on the standardized scale
   arma::cube Omega_samples = zeros<cube>(q,q,nd); // Omega_samples(k,kk,iter) = std_Omega_samples(k,kk,iter)/y_col_sd(k)*y_col_sd(kk)
   arma::cube Sigma_samples = zeros<cube>(q,q,nd);
   // should we also compute Sigma samples?
@@ -286,41 +281,42 @@ List sep_bartFit(arma::mat Y,
     // if(iter >= burn & (iter - 1) %% keep_every == 0)
     if(iter >= burn){
       for(size_t k = 0; k < q; k++){
-        for(size_t i = 0; i < n_obs; i++){
-          std_fit_samples(i,k,iter-burn) = allfit[k + i*q];
-          fit_samples(i,k,iter-burn)= y_col_sd(k)*allfit[k + i*q] + y_col_mean(k);
-        }
-      }
-      std_Omega_samples.slice(iter-burn) = Omega;
-      Sigma = arma::inv_sympd(Omega);
-      
-      for(size_t k = 0; k < q; k++){
+        for(size_t i = 0; i < n_obs; i++) train_samples(i,k,iter-burn)= y_col_sd(k)*allfit[k + i*q] + y_col_mean(k); // save the fits for the training data
         for(size_t kk = k; kk < q; kk++){
           Omega_samples(k,kk,iter-burn) = Omega(k,kk)/(y_col_sd(k) * y_col_sd(kk));
           Omega_samples(kk,k,iter-burn) = Omega_samples(k,kk,iter-burn);
-          
           Sigma_samples(k,kk,iter-burn) = y_col_sd(k) * y_col_sd(kk) * Sigma(k,kk);
           Sigma_samples(kk,k,iter-burn) = Sigma_samples(k,kk,iter-burn);
-          
         }
       }
-      // potentially also do the inversion and get Sigma samples
-      
-      //Sigma_samples.slice(iter) = arma::inv_sympd(Omega_samples.slice(iter));
-    }
+      // now get fits for testing data
+      // first let us clear all of the values in allfit_pred
+      for(size_t k = 0; k < q; k++){
+        for(size_t i = 0; i < n_pred; i++) allfit_pred[k + i*q] = 0.0; // resets the values in allfit
+      }
+      for(size_t k = 0; k < q; k++){
+        for(size_t t = 0; t < m; t++){
+          fit(t_vec[k][t], xi, dip, ftemp_pred); // get the fit of tree t for outcome k
+          for(size_t i = 0; i < n_pred; i++) allfit_pred[k + i*q] += ftemp_pred[i]; // update allfit_pred
+        }
+      }
+      for(size_t k = 0; k < q; k++){
+        for(size_t i = 0; i < n_pred; i++) test_samples(i,k,iter-burn) = y_col_sd(k) * allfit_pred[k + i*q] + y_col_mean(k);
+      }
+    } // closes if checking that iter > burn and that we should write the output
     
   } // closes main MCMC loop
   Rcpp::Rcout << "Finished MCMC" << endl;
   int time2 = time(&tp);
   Rcout << "time for MCMC: " << time2 - time1 << endl;
 
-  
-  
   // clean up some memory
   delete[] r_full;
   delete[] r_partial;
   delete[] allfit;
+  delete[] allfit_pred;
   delete[] ftemp;
+  delete[] ftemp_pred;
   
   delete[] x_ptr;
   delete[] x_pred_ptr;
@@ -332,7 +328,8 @@ List sep_bartFit(arma::mat Y,
   results["y_col_mean"] = y_col_mean;
   results["y_col_sd"] = y_col_sd;
   
-  results["fit_samples"] = fit_samples;
+  results["train_samples"] = train_samples;
+  results["test_samples"] = test_samples;
   results["Omega_samples"] = Omega_samples;
   results["Sigma_samples"] = Sigma_samples;
   results["alpha_samples"] = alpha_samples;

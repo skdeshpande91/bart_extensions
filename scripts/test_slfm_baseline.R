@@ -1,14 +1,76 @@
 library(Rcpp)
 library(RcppArmadillo)
 
+source("scripts/makeCutpoints.R")
+
+
+
+sourceCpp("src/slfm_bart.cpp")
+
+
+load("data/toy_example.RData")
+
+
+cutpoints <- makeCutpoints(X_train, gridlen = 1000)
+
+slfm_test <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 100, burn = 10)
+
+sourceCpp("src/uni_bartFit.cpp")
+
+sourceCpp("src/sep_bartFit.cpp")
+sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints)
+
+
+
+# In-sample RMSE
+sqrt( mean((Y[,1] - rowMeans(sep_fit$train_samples[,1,]))^2))
+sqrt( mean( (Y[,2] - rowMeans(sep_fit$train_samples[,2,]))^2))
+
+sqrt(mean( (f1_train - rowMeans(sep_fit$train_samples[,1,]))^2))
+sqrt(mean( (f2_train - rowMeans(sep_fit$train_samples[,2,]))^2))
+
+sqrt( mean( (c(f1_test_0, f1_test_1) - rowMeans(sep_fit$test_samples[,1,]))^2))
+sqrt( mean( (c(f2_test_0, f2_test_1) - rowMeans(sep_fit$test_samples[,2,]))^2))
+
+plot(1, type = "n", xlim  = c(0,1), ylim = f_range)
+points(X_test[,1], rowMeans(sep_fit$test_samples[,1,]), pch = 3, cex = 0.5)
+lines(X_test[1:101,1], f1_test_0, col = 'red', lty = 1)
+lines(X_test[102:202,1], f1_test_1, col = 'red', lty = 2)
+
+
+points(X_test[,1], rowMeans(sep_fit$test_samples[,2,]), pch = 4, cex = 0.5)
+lines(X_test[1:101,1], f2_test_0, col = 'blue', lty = 1)
+lines(X_test[102:202,1], f2_test_1, col = 'blue', lty = 2)
+
+
+
+# let's just learn u1
+test1 <- uni_bartFit(u1_train, X_train, X_test, cutpoints)
+
+test2 <- uni_bartFit(u2_train, X_train, X_test, cutpoints)
+
+test_3 <- uni_bartFit(f1_train, X_train, X_test, cutpoints)
+test_4 <- uni_bartFit(f2_train, X_train, X_test, cutpoints)
+
+plot(1, type = "n", xlim = c(0,1), ylim = f_range)
+points(X_test[,1], rowMeans(test_3$test_samples))
+lines(X_test[1:101,1], f1_test_0, col = 'red', lty = 1)
+lines(X_test[102:202,1], f1_test_1, col = 'red', lty = 2)
+
+plot(1, type = "n", xlim = c(0,1), ylim = f_range)
+points(X_test[,1], rowMeans(test_4$test_samples))
+lines(X_test[1:101,1], f2_test_0, col = 'blue', lty = 1)
+lines(X_test[102:202,1], f2_test_1, col = 'blue', lty = 2)
+
+plot(X_test[,1], rowMeans(test2$test_samples))
+lines(X_test[1:101,1], u2_test_0, col = 'red')
+lines(X_test[102:202,1], u2_test_1, col = 'red')
 #sourceCpp("src/uni_bartFit.cpp")
 sourceCpp("src/sep_bartFit.cpp")
 source("scripts/makeCutpoints.R")
 
-load("data/toy_example.RData")
 
-f_range <- c(-1,1) * max(abs(c(f1_full_0, f1_full_1, f2_full_0, f2_full_1)))
-u_range <- c(-1,1) * max(abs(c(u1_full, u2_full_0, u2_full_1)))
+
 
 # uni_fit_1 <- uni_bartFit(Y = Y[,1], X = X_train, X_pred = X_train, cutpoints)
 # uni_fit_2 <- uni_bartFit(Y = Y[,2], X = X_train, X_pred = X_train, cutpoints)

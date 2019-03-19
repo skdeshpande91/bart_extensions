@@ -194,8 +194,9 @@ To this end, we start with $\sigma_{\mu} = \frac{Y_{\max} - Y_{\min}}{2\kappa \s
 
 We place independent scaled inverse-$\chi^{2}$ priors on the residual variances $\sigma^{2}_{1}, \ldots, \sigma^{2}_{q}$, with $\sigma^{2}_{k} \sim \text{Inv. Gamma}\left(\frac{\nu}{2}, \frac{\nu\lambda_{k}}{2}\right).$
 We use \citet{Chipman2010}'s default choice of $\nu = 3$ and pick $\lambda_{k}$ so that \textit{a priori} $\P(\sigma_{k} < \hat{\sigma_{k}}) = 0.9$ where $\hat{\sigma}_{k}$ is an initial over-estimate of the residual standard deviation for task $k.$
-With $\nu = 3,$ this corresponds to a choice of $\lambda_{k} = \nu^{-1}q_{\nu,0.1}\hat{\sigma}^{2}_{k}$ where $q_{\nu,0.1}$ is the 10\% quantile of the $\chi^{2}_{\nu}$ distribution.
-In what follows, we will always take $\hat{\sigma}_{k} = 1,$ which is a reasonable over-estimated as we have standardized the responses to have standard deviation 1. 
+That is, we take $\lambda_{k} = \nu^{-1}q_{\nu,0.1}\hat{\sigma}^{2}$ where $q_{\nu,0.1}$ is the 10\% quantile of the $\chi^{2}_{\nu}$ distribution.
+For $\nu = 3$ and $\hat{\sigma}_{k} = 1$, which is a reasonable over-estimate of the residual variance once we standardize all responses, we have $\lambda_{k} \approx 0.195.$
+
 
 It remains to specify the prior on $\Phi$ and to set the number of basis elements $D$ and the number of trees within each basis element $m.$
 Recall that one of the key feature of univariate BART is the fact that the marginal prior on $f(\bx)$ gave substantially probability to the range of the observed responses.
@@ -445,45 +446,51 @@ $$
 \section{Illustration}
 
 To illustrate the proposed procedure, consider the following toy dataset with $n = 1000, p = 2$ and $q = 2.$
-The predictors $X_{1}, X_{2}$ were both drawn uniformly from the unit interval.
-We drew each $\phi_{k,d} \sim N(0,5^{2})$ and took the true latent basis functions to be
-\begin{align*}
-u_{1}(x_{1},x_{2}) &= 5x_{1}^{2} \\
-u_{2}(x_{1},x_{2}) &= 3x_{1} + (2 - 5\times \mathbf{1}(x_{2} > 0.5))\sin\left(\pi x_{1}\right) - 2 \times \mathbf{1}(x_{2} > 0.5)
-\end{align*}
-Finally, we generate the observed data by adding $N(0,0.75^{2})$ and $N(0, 0.5^{2})$ to the first and second tasks, respectively.
-Figure~\ref{fig:toy_example_data} shows $\bu$ and $\bf$, along with the observed data.
-Because $u_{2}$ depends on $x_{2}$ only through the indicator $\mathbf{1}(x_{2} > 0.5),$ both tasks $f_{1}$ and $f_{2}$ depend on $x_{2}$ only through this indicator as well.
+We drew the two predictors $X_{1}$ and $X_{2}$ uniformly from the unit interval and considered four true basis functions, depicted in Figure~\ref{fig:toy_example_basis}.
+All but $u_{2}$ is a function of $X_{1}$ alone and $u_{2}$ depends on $X_{2}$ only through the indicator $\mathbf{1}(X_{2} > 0.5)$:
+$$
+u_{2} = 3X_{1} + (2 - 5\times\mathbf{1}(X_{2} > 0.5))\sin\left(\pi X_{1}\right) - 2\times \mathbf{1}(X_{2} > 0.5).
+$$
+The functions $u_{3}$ and $u_{4}$ were drawn from Gaussian processes.
+$u_{3}$ was drawn from a GP with squared exponential kernel with length scale 0.25, while $u_{4}$ came from a GP whose kernel was a product of a squared exponential and periodic kernel, both with length scales 0.1.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width = 0.7\textwidth]{../images/toy_example_data.png}
-\caption{Toy dataset}
+\includegraphics[width = \textwidth]{../images/toy_example_basis.png}
+\caption{Basis functions used to generate toy dataset}
+\label{fig:toy_example_basis}
+\end{figure}
+
+To construct $f_{1}$ and $f_{2},$ we drew each $\phi_{k,d} \sim N(0,1)$ and then set $y_{i,1} = f_{1}(\bx_{i}) + 0.75\epsilon_{i,1}$ and $y_{i,2} = f_{2}(\bx_{i}) + 0.5\epsilon_{i,2}$ where $\epsilon_{i,1}, \epsilon_{i,2} \sim N(0,1).$
+Figure~\ref{fig:toy_example_data} plots $f_{1}$ and $f_{2}$ along with the observed data from both tasks.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width = 0.75\textwidth]{../images/toy_example_data.png}
+\caption{Two tasks, $f_{1}$ (red) and $f_{2}$ (blue). Realizations from $f_{1}$ are plotted with $\bullet$'s while realizations from $f_{2}$ are plotted with $\times$'s.}
 \label{fig:toy_example_data}
 \end{figure}
 
-To set up a baseline for our method, we fit separate BART regressions for each task using the \citet{Chipman2010} defaults.
-Figure~\ref{fig:toy_sepBART_fit} summarizes the performance of running separate BART regressions for each task.
+Recall that the main idea is to leverage the fact that $f_{1}$ and $f_{2}$ are dependent while learning them.
+As a baseline, we see how well we can learn these two functions separately, using individual BART fits.
+Figure~\ref{fig:toy_example_sepBART_fits} shows the posterior mean $f_{1}$ and $f_{2}$ using the default hyper-parameter specifications.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width = 0.7\textwidth]{../images/toy_sepBART_fit.png}
-\caption{Performance of separate BART fits on toy data}
-\label{fig:toy_sepBART_fit}
+\includegraphics[width = 0.75\textwidth]{../images/toy_example_sepBART_fits.png}
+\caption{Points are the posterior means of $f_{1}$ and $f_{2}$ resulting from separate BART fits with default hyper-parameters. The true functions are plotted as lines.}
+\label{fig:toy_example_sepBART_fits}
 \end{figure}
 
-\textit{A more complicated example}
-
-One that is harder to visualize would involve many more complicated functions.
-
-% maybe also some of the friedman function stuff
-% include like a max, logarithm, maybe generate something from a GP with SE x Periodic kernel. 
-% Then generate data from the Engelhardt group
+The in-sample root mean-squared errors $\left(n^{-1}\sum{\left(\hat{f}(\bx_{i}) - f(\bx_{i})\right)^{2}}\right)^{1/2}$ are 0.169 for task 1 and 0.168 for task 2.
+The out-of-sample RMSEs are 0.181 and 0.202, respectively.
+The hope is that our proposed models can achieve better performance than these baselines.
 
 
-\subsection{Missing observations}
-Above, we formulated our procedure with an eye towards missing data.
-In this experiment we consider varying the amount of missing data from each task.
+
+%\subsection{Missing observations}
+%Above, we formulated our procedure with an eye towards missing data.
+%In this experiment we consider varying the amount of missing data from each task.
 
 %We can also consider a slightly more complicated two-dimensional example.
 %We begin with 

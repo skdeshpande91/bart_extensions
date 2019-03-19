@@ -26,7 +26,7 @@ Rcpp::List slfm_bartFit(arma::mat Y,
                         arma::mat X_pred,
                         Rcpp::List xinfo_list,
                         int burn = 250, int nd = 1000,
-                        int D = 5, int m = 200, double kappa = 3, double nu = 1, double var_prob = 0.9)
+                        int D = 5, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9)
 {
   Rcpp::RNGScope scope;
   RNG gen;
@@ -184,7 +184,7 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   for(size_t i = 0; i < n_pred; i++){
     ftemp_pred[i] = 0.0;
     for(size_t d = 0; d < D; d++) ufit_pred[d + i*D] = 0.0;
-    for(size_t k = 0; k < q; k++) allfit_pred[k + i*D] = 0.0;
+    for(size_t k = 0; k < q; k++) allfit_pred[k + i*q] = 0.0;
   }
   
   dinfo_slfm di;
@@ -294,7 +294,7 @@ Rcpp::List slfm_bartFit(arma::mat Y,
       }
       for(size_t k = 0; k < q; k++){
         for(size_t i = 0; i < n_pred; i++){
-          allfit_pred[k + i*q] = 0.0; // resent allfit_pred[k+i*q];
+          allfit_pred[k + i*q] = 0.0; // reset allfit_pred[k+i*q];
           for(size_t d = 0; d < D; d++) allfit_pred[k+i*q] += Phi(k,d) * ufit_pred[d + i*D];
         }
       }
@@ -302,37 +302,6 @@ Rcpp::List slfm_bartFit(arma::mat Y,
         for(size_t k = 0; k < q; k++) f_test_samples(i,k,iter-burn) = y_col_sd(k) * allfit_pred[k+i*q] + y_col_mean(k);
         for(size_t d = 0; d < D; d++) u_test_samples(i,d,iter-burn) = ufit_pred[d + i*D];
       }
-      
-      
-      //for(size_t i = 0; i < n_pred; i++){
-      //  for(size_t k = 0; k < q; k++)  f_test_samples(i,k,iter-burn) = y_col_sd(k) * allfit_pred[k + i*q] + y_col_mean(k);
-      //  for(size_t d = 0; d < D; d++) u_test_samples(i,d,iter-burn) = ufit_pred[d + i*D];
-      //}
-/*
-      // save the test output
-      for(size_t d = 0; d < D; d++){
-        for(size_t i = 0; i < n_pred; i++) ufit_pred[d + i*D] = 0.0; // reset ufit_pred
-        for(size_t t = 0; t < m; t++){
-          fit(t_vec[d][t], xi, dip, ftemp_pred); // get the fit of tree t for basis function d for the test data
-          for(size_t i = 0; i < n_pred; i++) ufit_pred[d + i*D] += ftemp_pred[i]; // update the appropriate elements in ufit_pred
-        }
-      }
-
-      for(size_t k = 0; k < q; k++){
-        for(size_t i = 0; i < n_pred; i++){
-          allfit_pred[k + i*q] = 0.0; // reset allfit_pred[k+i*q]
-          for(size_t d = 0; d < D; d++) allfit_pred[k + i*q] += Phi(k,d) * ufit_pred[d + i*D]; // add Phi(k,d) * u_d(x_i) to allfit[k + i*q]
-        }
-      }
-      // at this point we have updated all of ufit_pred and allfit_pred
-      for(size_t i = 0; i < n_pred; i++){
-        for(size_t k = 0; k < q; k++) f_test_samples(i,k,iter-burn) = y_col_sd(k) * allfit_pred[k + i*q] + y_col_mean(k);
-        for(size_t d = 0; d < D; d++) u_test_samples(i,d,iter-burn) = ufit_pred[d + i*D];
-      }
-*/
-    
-      
-
     } // closes if checking that iter > burn and that we are saving samples
     
   } // closes main MCMC loop

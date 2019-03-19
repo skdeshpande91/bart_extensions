@@ -33,7 +33,7 @@ Rcpp::List uni_bartFit(arma::vec Y,
                  arma::mat X,
                  arma::mat X_pred,
                  Rcpp::List xinfo_list,
-                 int burn = 250, int nd = 1000, int m = 200, double kappa = 3, double nu = 1, double var_prob = 0.9)
+                 int burn = 250, int nd = 1000, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9)
 {
   // Random number generator, used in all draws.
   Rcpp::Rcout << "Entered uni_bartFit" << endl;

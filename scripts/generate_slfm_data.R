@@ -10,7 +10,7 @@ sigma_1 <- 0.75
 sigma_2 <- 0.5
 
 set.seed(31119)
-X_train <- cbind("X1" = runif(n), "X2" = runif(n))
+X_train <- cbind("X1" = runif(n), "X2" = 1*(runif(n) > 0.5))
 
 X_test <- cbind("X1" = c(seq(0, 1, by = 0.01), seq(0,1,by = 0.01)), "X2" = c(rep(0, times = 101), rep(1, times = 101)))
 
@@ -74,14 +74,14 @@ Y <- cbind("Y1" = y1, "Y2" = y2)
 # Plot the basis functions
 
 png("images/toy_example_basis.png", width = 8, height = 2, units = "in", res = 300)
-par(mar = c(3,3,2,1), mgp = c(1.8, 0.5, 0), mfrow = c(1,4), cex.main = 0.9, cex.lab = 0.8, cex.axis = 0.8)
+par(mar = c(3,3,2,1), mgp = c(1.8, 0.5, 0), mfrow = c(1,4))
 plot(1, type = "n", xlab = expression(X[1]), ylab = expression(u[1]), main = expression(Basis ~ Function ~ u[1]), xlim = c(0,1), ylim = u_range)
 lines(x1_test, u1_test)
 
 plot(1, type = "n", xlab = expression(X[1]), ylab = expression(u[2]), main = expression(Basis ~ Function ~ u[2]), xlim = c(0,1), ylim = u_range)
 lines(x1_test, u2_test_0, lty = 1)
 lines(x1_test, u2_test_1, lty = 2)
-legend("topleft", legend = c(expression(x[2]<=0.5), expression(x[2]>0.5)), lty = c(1,2), bty = "n", col = 'black',cex = 0.8)
+legend("topleft", legend = c(expression(x[2] == 0), expression(x[2] == 1)), lty = c(1,2), bty = "n", col = 'black')
 
 plot(1, type = "n", xlab = expression(X[1]), ylab = expression(u[3]), main = expression(Basis ~ Function ~ u[3]), xlim = c(0,1), ylim = u_range)
 lines(x1_test, u3_test)
@@ -105,25 +105,27 @@ lines(x1_test, f2_test_1, col = 'blue', lty = 2)
 
 #legend("topleft", legend = c(expression(f[1]), expression(f[2])), pch = c(3,4), text.col = c("red", "blue"), bty = "n", cex = 0.8)
 legend("topleft", legend = c(expression(f[1]), expression(f[2])), text.col = c('red', 'blue'), bty = 'n', cex = 0.8)
-legend("bottomleft", legend = c(expression(x[2] <= 0.5), expression(x[2] > 0.5)), lty = c(1,2), bty = "n", col = 'black', cex = 0.8)
+legend("bottomleft", legend = c(expression(x[2] == 0), expression(x[2] == 1)), lty = c(1,2), bty = "n", col = 'black', cex = 0.8)
 dev.off()
 
 png("images/toy_example_data.png", width = 6, height = 6, units = "in", res = 300)
 par(mar = c(3,3,2,1), mgp = c(1.8, 0.5, 0), mfrow = c(1,1), cex.main = 0.9, cex.lab = 0.8, cex.axis = 0.8)
 plot(1, type = "n", xlab = expression(X[1]), ylab = expression(f), main = "Tasks 1 & 2", xlim = c(0,1), ylim = f_range)
-
-lines(x1_test, f1_test_0, col = 'red', lty = 1)
-lines(x1_test, f1_test_1, col = 'red', lty = 2)
-points(X_train[,1], Y[,1], pch = 3, cex = 0.5)
-
-lines(x1_test, f2_test_0, col = 'blue', lty = 1)
-lines(x1_test, f2_test_1, col = 'blue', lty = 2)
+points(X_train[,1], Y[,1], pch = 16, cex = 0.5)
 points(X_train[,1], Y[,2], pch = 4, cex = 0.5)
 
 
-legend("topleft", legend = c(expression(f[1]), expression(f[2])), pch = c(3,4), text.col = c("red", "blue"), bty = "n", cex = 0.8)
+lines(x1_test, f1_test_0, col = 'red', lty = 1, lwd = 2)
+lines(x1_test, f1_test_1, col = 'red', lty = 2, lwd = 2)
+
+lines(x1_test, f2_test_0, col = 'blue', lty = 1, lwd = 2)
+lines(x1_test, f2_test_1, col = 'blue', lty = 2, lwd = 2)
+
+
+
+legend("topleft", legend = c(expression(f[1]), expression(f[2])), pch = c(16,4), text.col = c("red", "blue"), bty = "n", cex = 0.8)
 #legend("topleft", legend = c(expression(f[1]), expression(f[2])), text.col = c('red', 'blue'), bty = 'n', cex = 0.8)
-legend("bottomleft", legend = c(expression(x[2] <= 0.5), expression(x[2] > 0.5)), lty = c(1,2), bty = "n", col = 'black', cex = 0.8)
+legend("bottomleft", legend = c(expression(x[2] == 0), expression(x[2] == 1)), lty = c(1,2), bty = "n", col = 'black', cex = 0.8)
 dev.off()
 
 

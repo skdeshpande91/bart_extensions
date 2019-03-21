@@ -74,6 +74,7 @@ public:
   // This corresponds to a Wishart prior on Omega with centering matrix Lambda^(-1).
   std::vector<double> lambda; 
   double nu;
+  
   // constructor
   pinfo(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 1.0;}
 };
@@ -93,8 +94,11 @@ public:
   std::vector<double> lambda; // scaling parameter for the prior on residuals variance
   double nu; // degrees of freedom for the prior on residuals variances
   
+  double a_theta;
+  double b_theta;
+  
   // constructor
-  pinfo_slfm(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_phi = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 3.0;}
+  pinfo_slfm(){pbd = 1.0; pb = 0.5; alpha = 0.95; beta = 0.5; sigma_mu = std::vector<double>(1); sigma_phi = std::vector<double>(1); sigma_hat = std::vector<double>(1); lambda = std::vector<double>(1); nu = 3.0; a_theta = 1.0; b_theta = 1.0;}
 };
 
 //============================================================

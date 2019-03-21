@@ -11,13 +11,64 @@ sourceCpp("src/slfm_bart.cpp")
 load("data/toy_example.RData")
 
 
-cutpoints <- makeCutpoints(X_train, gridlen = 1000)
+cutpoints <- makeCutpoints(X_train, gridlen = 10000)
 
 
 #####
 # First do seperate BART fits
 
 sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints)
+
+slfm_test_D2_m100 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 2, m = 100)
+slfm_test_D2_m200 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 2, m = 200)
+slfm_test_D4_m100 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 4, m = 100)
+slfm_test_D4_m200 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 4, m = 200)
+
+slfm_test_D10_m100 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 10, m = 100)
+slfm_test_D10_m200 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 10, m = 200)
+
+slfm_test_D100_m1 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 100, m = 1)
+slfm_test_D200_m1 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 200, m = 1)
+
+slfm_test_D50_m50 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 50, m = 50)
+slfm_test_D50_m200 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 50, m = 200)
+
+
+save(sep_fit, slfm_test_D2_m100, slfm_test_D2_m200, slfm_test_D4_m100, slfm_test_D4_m200,
+     slfm_test_D10_m100, slfm_test_D10_m200, slfm_test_D50_m50, slfm_test_D50_m200, file = "slfm_test_mar20.RData")
+
+# RMSE
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(sep_fit$test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(sep_fit$test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D2_m100$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D2_m100$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D2_m200$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D2_m200$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D4_m100$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D4_m100$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D4_m200$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D4_m200$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D10_m200$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D10_m200$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D100_m1$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D100_m1$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D200_m1$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D200_m1$f_test_samples[,2,]))^2))
+
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(slfm_test_D50_m50$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(slfm_test_D50_m200$f_test_samples[,2,]))^2))
+
+
+
+slfm_test_D4_m200 <- slfm_bartFit(Y, X_train, X_test,)
+
 
 
 slfm_test <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 4, m = 200)

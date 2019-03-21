@@ -366,9 +366,44 @@ We now describe the updates of $\Phi$ when we have a Gaussian or spike-and-slab 
 \subsubsection{Gaussian Prior}
 
 Observe that
+\begin{align*}
+p(\Phi_{k,\cdot} | \bu, \by, \bsigma^{2}) &\propto \exp\left\{-\frac{1}{2\sigma^{2}_{\phi,k}}\sum_{d = 1}^{D}{\phi_{k,d}^{2}} - \frac{1}{2\sigma^{2}_{k}}\sum_{i = 1}^{n}{\delta_{i,k}\left(y_{i,k} - \sum_{d = 1}^{D}{\phi_{k,d}u_{d}(\bx_{i})}\right)^{2}}\right\}  \\
+&\propto \exp\left\{-\frac{1}{2}\left[\Phi_{k,\cdot}^{\top}V_{\Phi}^{-1}\Phi_{k,\cdot} - 2\sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}y_{i,k}\Phi_{k,\cdot}^{\top}\bu(\bx_{i})} \right]\right\}%- 2\sigma^{-2}_{k}\Phi_{k,\cdot}\sum_{i = 1}^{n}{\delta_{i,k}y_{i,k}\bu(\bx_{i})}\right]\right}
+%&\propto \exp\left\{-\frac{1}{2}\left[\Phi_{k,\cdot}^{\top}\left(\sigma^{-2}_{\phi}I_{d} + \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}\bu(\bx_{i})\bu(\bx_{i})^{\top}}\right)\right]\right\}
+\end{align*}
+where $V_{\Phi} = \left[\sigma^{-2}_{\phi,k}I_{d} + \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}\bu(\bx_{i})\bu^{\top}(\bx_{i})}\right]^{-1}.$
+From here, we immediately conclude that $\Phi_{k,\cdot} \mid \by, \bu, \bsigma \sim N(M_{\Phi}, V_{\Phi})$ where
 $$
-p(\Phi_{k,\cdot} | \bu, \by, \bsigma^{2}) \propto \exp\left\{-\frac{1}{2\sigma^{2}_{\phi,k}}\sum_{d = 1}^{D}{\phi_{k,d}^{2}} - \frac{1}{2\sigma^{2}_{k}}\sum_{i = 1}^{n}{\delta_{i,k}\left(y_{i,k} - \sum_{d = 1}^{D}{\phi_{k,d}u_{d}(\bx_{i})}\right)^{2}}\right\} 
+M_{\Phi} = \sigma^{-2}_{k}V_{\Phi}\sum_{i = 1}^{n}{\delta_{i,k}y_{i,k}\bu(\bx_{i})}
 $$
+
+While this expression is tidy, compute $V_{\Phi}$ and $M_{\Phi}$ at each iteration of our Gibbs sampler may be slightly tedious.
+
+Alternatively (and more similar to what is developed in the next subsection), we may update each $\phi_{k,d}$ sequentially holding the remaining elements constant.
+To this end, define $b_{i} = y_{i,k} - \sum_{d' \neq d}{\phi_{k,d'}u_{d'}(\bx_{i})}.$
+We have
+\begin{align*}
+p(\phi_{k,d} | \bu, \by, \bsigma^{2}, \Phi_{-k,-d}) &\propto \exp\left\{-\frac{1}{2}\left[\sigma_{\phi,k}^{-2}\phi_{k,d}^{2} - \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}(b_{i} - \phi_{k,d}u_{d}(\bx_{i}))^{2}}\right]\right\}\\
+&\propto \exp\left\{-\frac{1}{2}\left[ \phi_{k,d}^{2}v_{\phi}^{-1} - 2\phi_{k,d}\sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}b_{i}u_{d}(\bx_{i})}\right]\right\}
+%~&\propto \exp\left\{-\frac{1}{2}\left[\phi_{k,d}^{2}\left[\sigma^{-2}_{\phi,k} + \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}u_{d}(\bx_{i})^{2}}\right] - 2\phi_{k,d}\sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}b_{i}}\right]\right\}
+\end{align*}
+where $v_{\phi}^{-1} = \sigma^{-2}_{\phi,k} + \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}u_{d}(\bx_{i})^{2}}.$ 
+Hence the conditional posterior distribution of $\phi_{k,d}$ given all other parameters is $N(m_{\phi},v_{\phi})$ where
+$$
+m_{\phi} = v_{\phi} \times \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}b_{i}u_{d}(\bx_{i})}
+$$
+
+We compute
+\begin{align*}
+\sum_{i = 1}^{n}{\delta_{i,k}(b_{i} - \phi_{k,d}u_{d}(\bx_{i}))^{2}} &= \sum_{i = 1}^{n}{\delta_{i,k}(b_{i}^{2} - 2b_{i}u_{d}(\bx_{i})\phi_{k,d} - \phi_{k,d}^{2}u_{d}(\bx_{i}))}
+\end{align*}
+
+
+\begin{comment}
+% Update 20 March 2019: The formula in the Gibbs sampler seems to be wrong. In particular the sum $\sum_{i = 1}^{n}{\delta_{i,k}b_{i}}$ is missing a factor of $u_{d}(\bx_{i}).$
+% To see this note that
+
+
 
 %Let $\bu(\bx_{i})$ be the $d \times 1$ vector with entries $u_{d}(\bx_{i}).$
 %Then the term in the exponent can be written as
@@ -398,7 +433,7 @@ v_{\phi} &= \left[\sigma^{-2}_{\phi,k} + \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_
 m_{\phi} &= v_{\phi} \times \sigma^{-2}_{k}\sum_{i = 1}^{n}{\delta_{i,k}b_{i}}
 \end{align*}
 
-
+\end{comment}
 \subsubsection{Spike-and-slab prior}
 
 We re-parametrize like in \citet{Titsias2011} so that $\phi_{k,d} = \gamma_{k,d}\tilde{\phi}_{k,d}$ where \textit{a priori} $\tilde{\phi}_{k,d} \sim N(0,\sigma^{2}_{\phi,k}).$
@@ -417,7 +452,7 @@ m_{\phi}(\gamma) &= \gamma v_{\phi}(\gamma)\sigma^{-2}_{k}\sum_{i = 1}^{n}{b_{i}
 \end{align*}
 and marginalize out $\phi_{k,d}$ to obtain the conditional mass function of $\gamma_{k,d}$ given all of the other parameters
 $$
-p(\gamma_{k,d} | \ldots) \propto \theta^{\gamma_{k,d}}(1 - \theta)^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{-\frac{m_{\phi}(\gamma_{k,d})^{2}}{2v_{\phi}(\gamma_{k,d})}\right\}
+p(\gamma_{k,d} | \ldots) \propto \theta^{\gamma_{k,d}}(1 - \theta)^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{\frac{m_{\phi}(\gamma_{k,d})^{2}}{2v_{\phi}(\gamma_{k,d})}\right\}
 $$
 %$$
 %p(\gamma_{k,d} | \ldots) \propto \theta^{\gamma_{k,d}}(1 - \theta)^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{\frac{v_{\phi}(\gamma_{k,d})M^{2}_{\phi}(\gamma_{k,d})}{2}\right\}

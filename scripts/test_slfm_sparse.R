@@ -10,9 +10,59 @@ cutpoints <- makeCutpoints(X_train, gridlen = 10000)
 sourceCpp("src/slfm_bart_sparse.cpp")
 sourceCpp("src/slfm_bart.cpp")
 
-dense_test <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 10, m = 200)
+dense_test <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 20, m = 100)
+
+sparse_test1 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1, b_theta = 1, nd = 1000, burn = 500, D = 20, m = 100)
+sparse_test2 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1, b_theta = 10, nd = 1000, burn = 500, D = 20, m = 100)
+sparse_test3 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 10, b_theta = 1, nd = 1000, burn = 500, D = 20, m = 100)
+sparse_test4 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 10, b_theta = 10, nd = 1000, burn = 500, D = 20, m = 100)
+sparse_test5 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 100, b_theta = 100, nd = 1000, burn= 500, D = 20, m = 100)
+sparse_test6 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 100, b_theta = 1, nd = 1000, burn= 500, D = 20, m = 100)
+sparse_test7 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1, b_theta = 100, nd = 1000, burn= 500, D = 20, m = 100)
+
+
+
+plot(X_train[,1], rowMeans(dense_test$f_train_samples[,1,]), pch = 16, cex = 0.6, col = 'black')
+points(X_train[,1], rowMeans(sparse_test1$f_train_samples[,1,]), pch = 16, cex = 0.5, col = 'blue')
+points(X_train[,1], rowMeans(sparse_test2$f_train_samples[,1,]), pch = 3, cex = 0.5, col = 'green')
+points(X_train[,1], rowMeans(sparse_test3$f_train_samples[,1,]), pch = 4, cex = 0.5, col = 'yellow')
+points(X_train[,1], rowMeans(sparse_test4$f_train_samples[,1,]), pch = 5, cex = 0.5, col = 'purple')
+
+
+points(X_train[,1], rowMeans(sparse_test5$f_train_samples[,1,]), pch = 3, cex = 0.5, col = 'blue')
+points(X_train[,1], rowMeans(sparse_test6$f_train_samples[,1,]), pch = 4, cex = 0.5, col = 'red')
+points(X_train[,1], rowMeans(sparse_test7$f_train_samples[,1,]), pch = 5, cex = 0.5, col = 'green') # really demonstrates that we have agressive shrinkage to the mean
+abline(h = mean(Y[,1]), col = 'red')
+abline(h = mean(Y[,1]), col = 'red')
+
+
 sparse_test1 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1, b_theta = 1, nd = 1000, burn = 500, D = 10, m = 200)
-sparse_test2 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 10, b_theta = 1, nd = 1000, burn = 500, D = 10, m = 200)
+sparse_test2 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 10, b_theta = 10, nd = 1000, burn = 500, D = 10, m = 200)
+sparse_test3 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1000, b_theta = 1000, nd = 1000, burn = 500, D = 10, m = 200)
+sparse_test4 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 100, b_theta = 1, nd = 1000, burn = 500, D = 10, m = 200)
+
+
+
+
+
+
+# How many basis functions used for task 1
+rowMeans(dense_test$Phi[1,,] != 0) 
+rowMeans(sparse_test1$Phi_samples[1,,] != 0) # just about 10% --> only about 1 tree
+rowMeans(sparse_test1$theta_samples) # theta concentrates around 0.09
+# Is it possible that 
+
+
+rowMeans(sparse_test2$Phi_samples[1,,] != 0) # just about 35% --> only about 3 trees
+rowMeans(sparse_test2$theta_samples) # theta concentrates around 0.34
+
+rowMeans(sparse_test3$Phi_samples[1,,] != 0) # around 49%
+
+
+plot(X_train[,1], rowMeans(sparse_test1$f_train_samples[,1,]), ylim = f_range, pch = 16, cex = 0.)
+abline(h = mean(Y[,1]), col = 'red')
+
+
 sparse_test3 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 100, b_theta = 1, nd = 1000, burn = 500, D = 10, m = 200)
 sparse_test4 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 1000, b_theta = 0.001, nd = 1000, burn = 500, D = 10, m = 200)
 sparse_test5 <- slfm_bartFit_sparse(Y, X_train, X_test, cutpoints, a_theta = 10, b_theta = 10, nd = 1000, burn = 500, D = 10, m = 200)

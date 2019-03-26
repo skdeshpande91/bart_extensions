@@ -17,7 +17,11 @@ cutpoints <- makeCutpoints(X_train, gridlen = 10000)
 #####
 # First do seperate BART fits
 
-sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints)
+sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints, verbose = TRUE)
+
+Y_missing <- Y
+Y_missing[1:10,1] <- NA
+sep_fit_missing <- sep_bartFit(Y_missing, X_train, X_test, cutpoints, verbose = TRUE)
 
 slfm_test_D2_m100 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 2, m = 100)
 slfm_test_D2_m200 <- slfm_bartFit(Y, X_train, X_test, cutpoints, nd = 1000, burn = 500, D = 2, m = 200)
@@ -83,8 +87,8 @@ png("images/toy_example_sepBART_fits.png", width = 6, height = 6, units = "in", 
 par(mar = c(3,3,2,1), mgp = c(1.8, 0.5, 0))
 plot(1, type = "n", xlab = expression(X[1]), ylab = "f", main = "Posterior Mean from separate BART fits", xlim = c(0,1), ylim = f_range)
 
-points(X_test[,1], rowMeans(sep_fit$test_samples[,1,]), pch = 16, cex = 0.5, col = 'red')
-points(X_test[,1], rowMeans(sep_fit$test_samples[,2,]), pch = 4, cex = 0.5, col = 'blue')
+points(X_test[,1], rowMeans(sep_fit$f_test_samples[,1,]), pch = 16, cex = 0.5, col = 'red')
+points(X_test[,1], rowMeans(sep_fit$f_test_samples[,2,]), pch = 4, cex = 0.5, col = 'blue')
 
 lines(X_test[1:101,1], f1_test_0, col = 'red', lty = 1, lwd = 2)
 lines(X_test[102:202,1], f1_test_1, col = 'red', lty = 2, lwd = 2)

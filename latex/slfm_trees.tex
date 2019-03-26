@@ -172,7 +172,7 @@ With these default choices in mind, abusing our notation slightly, we will take 
 Throughout, we will assume that the observed data from each task has been centered and scaled to have standard deviation one.
 In order to perform this scaling, we will require that we observe at least 2 realizations from each task \textcolor{blue}{[skd]: This is one disadvantage vis-a-vis using GPs}.
 
-In order to induce dependence between the $f_{k}$'s, we follow the basic idea of \citet{Teh2004} and introduce independent latent basis functions $u_{1}, \ldots, u_{D}$ and express each $f_{k}$ as a linear combination of these basis elements:
+In order to induce dependence between the $f_{k}$'s, we follow the basic idea of \citet{Teh2005} and introduce independent latent basis functions $u_{1}, \ldots, u_{D}$ and express each $f_{k}$ as a linear combination of these basis elements:
 $$
 f_{k}(\bx) = \sum_{d = 1}^{D}{\phi_{k,d}u_{d}(\bx)}.
 $$
@@ -235,25 +235,39 @@ $$
 It is worth pointing out that as $D \rightarrow \infty,$ the ratio $\frac{D}{q_{D,\tilde{\alpha}}} \leftrightarrow 1$ for any $\tilde{\alpha} > 0.5$
 We note that larger choices of $\sigma^{2}_{\phi,k}$ induce \textit{less} regularization on the fit of $f_{k}$ since it disperses more marginal probability mass of $f_{k}$ outside the interval $[Y_{k,\min}, Y_{k,\max}].$
 
-Note that under this simple prior specification, each task $f_{k}$ depends on every basis function $u_{d},$ and therefore each of the tasks are \textit{a priori} correlated.
-In some situations, this may be overly restrictive or unrealistic. 
-A more flexible option that can adapt to the situation that some of the tasks are uncorrelated is to use a sparsity inducing prior on the elements of $\Phi.$
-\textcolor{blue}{[skd]: Another motivation: the cross-covariances depend on a matrix of rank $\min\left\{D,q\right\}$. We could want adaptivity}
-Specifically, we can introduce binary indicators $\gamma_{k,d}$ and model 
+%Note that under this simple prior specification, each task $f_{k}$ depends on every basis function $u_{d},$ and therefore each of the tasks are \textit{a priori} correlated.
+%In some situations, this may be overly restrictive or unrealistic. 
+%A more flexible option that can adapt to the situation that some of the tasks are uncorrelated is to use a sparsity inducing prior on the elements of $\Phi.$
+%\textcolor{blue}{[skd]: Another motivation: the cross-covariances depend on a matrix of rank $\min\left\{D,q\right\}$. We could want adaptivity}
+
+In a certain sense, our goal is to find a $D$-dimensional representation of the $q$-dimensional tasks.
+Up to this point, we have described only fixing $D$ to some, possibly larger value.
+Another goal may be to learn a lower dimensional representation of the $q$ tasks.
+To achieve this, consider the following spike-and-slab prior:
 \begin{align*}
 \phi_{k,d} | \gamma_{k,d} &\sim \gamma_{k,d}N(0,\sigma^{2}_{\phi,k}) + (1 - \gamma_{k,d})\delta_{0} \\
-\gamma_{k,1}, \ldots, \gamma_{k,d} | \theta_{k} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{k}) \hspace{0.1in} \text{for $k = 1, \ldots, q$}\\
-\theta_{1}, \ldots, \theta_{q} &\sim \text{Beta}(a,b)
+%\gamma_{k,1}, \ldots, \gamma_{k,d} | \theta_{k} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{k}) \hspace{0.1in} \text{for $k = 1, \ldots, q$}\\
+\gamma_{1,d}, \ldots, \gamma_{q,d} | \theta_{d} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{d}) \hspace{0.1in} \text{for $d = 1, \ldots, D$} \\
+\theta_{1}, \ldots, \theta_{D} &\sim \text{Beta}(a,b)
 \end{align*}
 
-To set an appropriate value of $\sigma^{2}_{\phi,k},$ we note that $\sigma^{-2}_{\phi,k}\lVert \Phi_{k,\cdot} \rVert_{2}^{2}$ is now a $\chi^{2}$ random variable with a \textit{random} number of degrees of freedom equal to the number of non-zero $\phi_{k,d}.$
-\textcolor{blue}{[skd]: I'm still thinking about the details but I'm pretty sure the number of non-zero entries concentrates around it's mean and we can probably do something with that.}
+
+Conditional on $\Phi_{k,\cdot}$, we still have that $f_{k}(\bx) | \Phi_{k,\cdot} \sim N(0, \sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}).$
+However, the random variable $\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ is now a scaled $\chi^{2}$-random variable with a \textit{random} number of degrees of freedom.
+In light of this, if we took $\sigma_{\phi}$ as before, the value of $\sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ will tend to be much smaller, resulting in much more aggressive shrinkage of $f_{k}$ to $\overline{Y}_{k}.$
+Instead, we can set
+$$
+\sigma_{\phi,k} = \left(\frac{D}{q_{aD/(a+b),0.9}}\right)^{1/2} \times \frac{Y_{k,\max} - Y_{k,\,min}}{Y_{\max} - Y_{\min}}.
+$$
+
+%To set an appropriate value of $\sigma^{2}_{\phi,k},$ we note that $\sigma^{-2}_{\phi,k}\lVert \Phi_{k,\cdot} \rVert_{2}^{2}$ is now a $\chi^{2}$ random variable with a \textit{random} number of degrees of freedom equal to the number of non-zero $\phi_{k,d}.$
+%\textcolor{blue}{[skd]: I'm still thinking about the details but I'm pretty sure the number of non-zero entries concentrates around it's mean and we can probably do something with that.}
 
 
 \subsection{Connection to Existing Work}
 \label{sec:related_work}
 
-Our model is closely related to (and in fact, inspired by) the semi-parametric latent factor (SFLM) of \citet{Teh2004}, who introduce independent basis functions $u_{1}, \ldots, u_{D}$ and loading matrix $\Phi \in \R^{q \times D}$ and model $\bf = \Phi \bu.$
+Our model is closely related to (and in fact, inspired by) the semi-parametric latent factor (SFLM) of \citet{Teh2005}, who introduce independent basis functions $u_{1}, \ldots, u_{D}$ and loading matrix $\Phi \in \R^{q \times D}$ and model $\bf = \Phi \bu.$
 In that work, they place Gaussian process priors on the basis functions, $u_{d} \sim \text{GP}(k_{d})$ while have placed BART priors on them. 
 In fact, the SLFM is a special case of the liner model of coregionalization (LMC) that is commonly used for fitting multi-output GPs \citep[see, e.g.][]{Alvarez2012}.
 At a high-level, the LMC works by introducing several independent collections of basis functions which are independent draws from a common GP prior and then expressing the functions $f_{1}, \ldots, f_{q}$ 
@@ -452,7 +466,7 @@ m_{\phi}(\gamma) &= \gamma v_{\phi}(\gamma)\sigma^{-2}_{k}\sum_{i = 1}^{n}{b_{i}
 \end{align*}
 and marginalize out $\phi_{k,d}$ to obtain the conditional mass function of $\gamma_{k,d}$ given all of the other parameters
 $$
-p(\gamma_{k,d} | \ldots) \propto \theta^{\gamma_{k,d}}(1 - \theta)^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{\frac{m_{\phi}(\gamma_{k,d})^{2}}{2v_{\phi}(\gamma_{k,d})}\right\}
+p(\gamma_{k,d} | \ldots) \propto \theta_{d}^{\gamma_{k,d}}(1 - \theta_{d})^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{\frac{m_{\phi}(\gamma_{k,d})^{2}}{2v_{\phi}(\gamma_{k,d})}\right\}
 $$
 %$$
 %p(\gamma_{k,d} | \ldots) \propto \theta^{\gamma_{k,d}}(1 - \theta)^{1 - \gamma_{k,d}}v_{\phi}(\gamma_{k,d})^{\frac{1}{2}}\exp\left\{\frac{v_{\phi}(\gamma_{k,d})M^{2}_{\phi}(\gamma_{k,d})}{2}\right\}
@@ -461,6 +475,13 @@ $$
 
 So we may draw a new $\gamma_{k,d}$ according to this distribution.
 Once we do that, we can draw a new $\tilde{\phi}_{k,d} \sim N(m_{\phi}(\gamma_{k,d}), v_{\phi}(\gamma_{k,d}))$
+
+Having updated each $\gamma_{k,d}$, we have a conjugate update for $\theta_{1},\ldots, \theta_{d}$:
+$$
+p(\theta_{1}, \ldots, \theta_{d} | \ldots) \propto \prod_{d = 1}^{D}{\theta_{d}^{a_{\theta} - 1 + \sum_{k}{\gamma_{k,d}}}(1 - \theta_{d})^{b_{\theta} - 1 + \sum_{k}{(1 - \gamma_{k,d})}}}
+$$
+
+
 \textcolor{blue}{[skd]: the expression of $p(\gamma | \ldots)$ above is somewhat different than what \citet{Titsias2011} derived, which is a bit concerning... it's possible I don't follow their notation}
 
 \subsection{Updating $\bsigma$}
@@ -477,7 +498,46 @@ $$
 \sigma^{2}_{k} | \by, \bu, \Phi \sim \text{Inv. Gamma}\left(\frac{\nu + \sum{\delta_{i,k}}}{2}, \frac{\nu\lambda_{k} + \sum{\delta_{i,k}(y_{i,k} - \Phi\bu(\bx_{i}))^{2}}}{2}\right)
 $$
 
+\section{Illustrations}
 
+To illustrate the proposed procedure, consider a toy dataset with $n = 1000, p = 2$ and $q = 10.$
+% Describe the dataset Toy 2
+
+% Consider also running GPAR with this data to see how that does.
+% In a sense, this is not a fair comparison because GPAR has no real way of detecting the dependence of X_2...
+
+
+\subsection{Cars Dataset}
+% Use the UCI automobile dataset
+Here we predict city miles per gallon, highway mpg, and price using the remaining features.
+Note that most of these features are categorical and have been re-coded to 0/1 dummy variables.
+
+
+Again, we see the advantage of a multivariate approach.
+
+
+\subsection{Foreign Exchange Data}
+
+
+\subsection{EEG Data}
+
+
+\subsection{...}
+
+
+\newpage
+
+\section{Next Directions}
+
+There are several potential directions we may pursue, summarized below
+\begin{itemize}
+\item{Heteroskedasticity: in our model, we assumed the residual error in each task did not depend on $\bX.$ We can relax this and model the residual errors using the product-of-trees formulation in \citet{Pratola2017}}
+\item{Mixed type data: Frequently we observe both continuous and discrete data an wish to model both jointly. We can use ideas from \citet{Pourmohamad2016} or \citet{Murray2017}}
+\item{Sparsity in $\Phi$ and discovering the latent dimension $D$: throughout, we have focused on a fixed $D,$ which must be specified by the user. Implicit in our development thus far is the assumption that variation in the $q$-dimensional response is adequately captured using $D$ latent basis functions. In some cases, we have taken $D > q,$ in the hopes that the $u_{d}$'s form an over-complete basis. But in many applications, when $q$ is larger, there may be substantial interest in learning a \textit{lower}-dimensional representation where the latent dimension $D \ll q$ must be learned. We can elaborate the model above to accommodate this setting by placing a sparsity-inducing prior on the elements of $\Phi.$ One example is a spike-and-slab prior in the style of \citet{Titsias2011}. Rather than using a fixed Bernoulli prior for the indicators, however, we may resort to an Indian Buffet Process style prior. This will in fact place a mild identifiability constraint on the $u_{d}$'s and is quite similar to ideas from sparse factor analysis.}
+\end{itemize}
+
+
+\newpage
 \section{Illustration}
 
 To illustrate the proposed procedure, consider the following toy dataset with $n = 1000, p = 2$ and $q = 2.$
@@ -1001,7 +1061,7 @@ I think the LMC model is equivalent to modeling each $f_{k}$ as a linear combina
 
 \textit{Semi-parametric latent factor model}
 
-\citet{Teh2004} proposes a slightly different formulation. They write ``In the spirit of factor analysis, we view the relationships among $C$ components of a response vector $y$ as reflecting a linear (or generalized linear) mixing of P underlying latent variables.''
+\citet{Teh2005} proposes a slightly different formulation. They write ``In the spirit of factor analysis, we view the relationships among $C$ components of a response vector $y$ as reflecting a linear (or generalized linear) mixing of P underlying latent variables.''
 
 %They model $\bf = \Phi \bu$ where $\bu$ is a collection of independent GPs and $\Phi$ is the mixing matrix.
 %What we propose is really an extension of this model (and not the LMC)

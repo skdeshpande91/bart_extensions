@@ -550,7 +550,7 @@ double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi,
   unif = gen.uniform();
   //Rcpp::Rcout << "[bd_slfm]: unif = " << unif << " PBx = " << PBx << endl;
   if(unif < PBx){
-    Rcpp::Rcout << "[bd_slfm]: birth proposal" << endl;
+    //Rcpp::Rcout << "[bd_slfm]: birth proposal" << endl;
     //draw bottom node, choose node index ni from list in goodbots
     size_t ni = floor(gen.uniform()*goodbots.size());
     //Rcpp::Rcout << "[bd]: proposing birth at bottom node " << ni << endl;
@@ -682,7 +682,7 @@ double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi,
       // For the moment, we will set the new terminal node values to zero
       // Since we immediately fill them in the next step of the MCMC with drmu.
       // Set mul and mur to zero, since we will immediately
-      Rcpp::Rcout << "    birth successful" << endl;
+      //Rcpp::Rcout << "    birth successful" << endl;
       x.birth(nx->nid(),v,c,0.0,0.0);
       
       return(alpha);
@@ -694,7 +694,7 @@ double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi,
     // DEATH PROPOSAL
     //--------------------------------------------------
     
-    Rcpp::Rcout << "[bd]: propose death" << endl;
+    //Rcpp::Rcout << "[bd_slfm]: propose death" << endl;
     //--------------------------------------------------
     //draw proposal
     
@@ -778,7 +778,7 @@ double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi,
     if(unif<alpha) {
       // Do the death move. We will set the new mu parameter to be 0.0
       // This will immediately be overwritten in the next step when we call drmu
-      Rcpp::Rcout << " ... death successful" << endl;
+      //Rcpp::Rcout << " ... death successful" << endl;
       x.death(nx->nid(),0.0);
       //return true;
       return(-1.0*alpha);

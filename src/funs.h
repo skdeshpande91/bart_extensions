@@ -207,6 +207,7 @@ void makexinfominmax(size_t p, xinfo& xi, size_t nc, std::vector<double> &minx, 
 // Functions to update Phi in SLFM
 void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
 
+void update_Phi_ss(arma::mat &Phi, arma::vec &theta, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi,  RNG &gen);
 // Function to update sigma in SLFM
 void update_sigma(const arma::mat &Phi, arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
 

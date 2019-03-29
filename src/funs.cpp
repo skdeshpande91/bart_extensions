@@ -694,6 +694,7 @@ void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arm
           // note that af currently contains the fit of every tree but tree t in basis function d
           r = di.y[k + si.I[i]*di.q] - di.af[k + si.I[i]*di.q]; // partial residual
           //Rcpp::Rcout << " r = " << r << endl;
+          //if(r != r) Rcpp::Rcout << "[mu_posterior_slfm]: nan in r. i = " << i << " k = " << k << endl;
           mu_bar += Phi(k, di.d) * r/(sigma(k) * sigma(k));
         } else{
           //Rcpp::Rcout << " observation missing. skipping this!" << endl;
@@ -702,6 +703,7 @@ void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arm
     } // closes loop over observations
   } // closes if checking that there are observation in terminal node
   V = 1.0/V_inv;
+  //if(V != V) Rcpp::Rcout << "[mu_posterior_slfm]: nan in V. V_inv = " << V_inv << endl;
   mu_bar *= V;
 }
 
@@ -763,7 +765,7 @@ void drmu_multi(tree &t, const arma::mat &Omega, xinfo &xi, dinfo &di, pinfo &pi
     if(bnv[i]->getm() != bnv[i]->getm()){
       // something went horribly horribly wrong!
       //for(int ii = 0; ii<di.n;ii++) Rcout << *(di.x + ii*di.p) << " " ;
-      //Rcout << endl << "mu_bar = " << mu_bar << " V = " << V << endl;
+      Rcpp::Rcout << "mu_bar = " << mu_bar << " V = " << V << endl;
       Rcpp::stop("drmu_failed");
     }
   } // closes loop over the vector of bottom nodes
@@ -786,6 +788,8 @@ void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG
       // something went horribly horribly wrong!
       //for(int ii = 0; ii<di.n;ii++) Rcout << *(di.x + ii*di.p) << " " ;
       //Rcout << endl << "mu_bar = " << mu_bar << " V = " << V << endl;
+      Rcpp::Rcout << "mu_bar = " << mu_bar << " V = " << V << endl;
+
       Rcpp::stop("drmu_failed");
     }
   } // closes loop over the vector of bottom nodes
@@ -803,8 +807,12 @@ void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, d
     mu_bar = 0.0;
     V = 0.0;
     mu_posterior_slfm(mu_bar, V, Phi, sigma, sv[i], di, pi.sigma_mu[di.d]);
+    //Rcpp::Rcout << "[drmu_slfm]: mu_bar = " << mu_bar << " V = " << V << endl;
     bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
     if(bnv[i]->getm() != bnv[i]->getm()){
+      //for(size_t ii = 0; ii < sv[i].I.size(); ii++) Rcpp::Rcout << " " << ii ;
+      //Rcpp::Rcout << endl;
+      Rcpp::Rcout << "mu_bar = " << mu_bar << " V = " << V << endl;
       Rcpp::stop("drmu failed: nan in terminal node");
     }
   } // closes loop over the vector of bottom nodes of tree t
@@ -898,15 +906,15 @@ void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di,
         if(di.delta[k + i*di.q] == 1){ // check that we observe task k for observation i
           r = di.y[k + i*di.q];
           for(int dd = 0; dd < di.D; dd++){
-            if(dd != d){
-              r -= Phi(k,dd) * di.uf[dd + i * di.D];
-            }
+            if(dd != d) r -= Phi(k,dd) * di.uf[dd + i * di.D];
           }
           // at this point r contains the current partial residual based on the fit all other (d-1) basis functions.
           // note that we cannot use allfit here because it is based on the previous version of Phi
-          mu_phi += r/(sigma(k) * sigma(k));
+          //mu_phi += r/(sigma(k) * sigma(k)); // wrong formula! It is missing a factor of u_d(x_i) .. caught on 20 March 2019
+          mu_phi += r/(sigma(k) * sigma(k)) * di.uf[d + i * di.D];
+          
           V_phi_inv += (di.uf[d + i*di.D] * di.uf[d + i*di.D])/(sigma(k) * sigma(k));
-        }
+        } // closes if checking that we observe task k for observation i
       } // closes loop over the observations i
       V_phi = 1.0/V_phi_inv;
       mu_phi *= V_phi;
@@ -915,6 +923,73 @@ void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di,
   } // closes loop over the tasks
   
 }
+
+void update_Phi_ss(arma::mat &Phi, arma::vec &theta, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi,  RNG &gen)
+{
+  double r = 0.0; // partial residual
+  double mu_phi_0 = 0.0; // posterior mean when gamma = 0... this is always 0 because prior mean of phi is 0
+  double mu_phi_1 = 0.0; // posterior mean when gamma = 1... this is basically mu_phi from update_Phi_gaussian
+  double v_phi_0_inv = 0.0; // posterior precision when gamma = 0 ... alway 1/(pi.sigma_phi[k] * pi.sigma_phi[k])
+  double v_phi_1_inv = 0.0; // posterior precision when gamma = 1
+  double v_phi_0 = 0.0;
+  double v_phi_1 = 0.0;
+  double log_p0 = 0.0;
+  double log_p1 = 0.0;
+  double p1 = 0.0;
+  double p0 = 0.0;
+  int gamma_sum = 0; // counts number of gammas that are bigger than 0
+  
+  for(size_t d = 0; d < di.D; d++){
+    gamma_sum = 0; // counts how many gamma_k,d's are active for basis function d
+    for(size_t k = 0; k < di.q; k++){
+      mu_phi_0 = 0.0;
+      mu_phi_1 = 0.0;
+      v_phi_0_inv = 1.0/(pi.sigma_phi[k] * pi.sigma_phi[k]);
+      v_phi_1_inv = 1.0/(pi.sigma_phi[k] * pi.sigma_phi[k]);
+      for(size_t i = 0; i < di.n; i++){
+        if(di.delta[k + i*di.q] == 1){
+          r = di.y[k + i*di.q];
+          for(size_t dd = 0; dd < di.D; dd++){
+            if(dd != d) r -= Phi(k,dd) * di.uf[dd + i*di.D];
+          }
+          // at this point r contains the current partial residual based on the fit all other (d-1) basis functions
+          mu_phi_1 += r/(sigma(k) * sigma(k)) * di.uf[d + i*di.D];
+          v_phi_1_inv += (di.uf[d + i*di.D] * di.uf[d + i*di.D])/(sigma(k) * sigma(k));
+        } // check that observe task k for observation i
+      } // closes loop over the observations i
+      v_phi_0 = 1.0/v_phi_0_inv;
+      v_phi_1 = 1.0/v_phi_1_inv;
+      mu_phi_0 *= v_phi_0;
+      mu_phi_1 *= v_phi_1;
+      
+      // more useful to work on the log-scale for the probabilities
+      
+      log_p0 = log(1.0 - theta(d)) + 1/2 * log(v_phi_0) + 1/2 * mu_phi_0 * mu_phi_0 / v_phi_0;
+      log_p1 = log(theta(d)) + 1/2 * log(v_phi_1) + 1/2 * mu_phi_1 * mu_phi_1 / v_phi_1;
+      
+      // subtract the larger of the two log_p0 and log_p1 from both
+      if(log_p0 < log_p1){
+        log_p0 -= log_p1;
+        log_p1 -= log_p1;
+      } else{
+        log_p1 -= log_p0;
+        log_p0 -= log_p0;
+      }
+      p1 = exp(log_p1)/(exp(log_p0) + exp(log_p1));
+      p0 = exp(log_p0)/(exp(log_p0) + exp(log_p1));
+      
+      // now we are ready to draw gamma:
+      if(gen.uniform() < p1){
+        Phi(k,d) = mu_phi_1 + sqrt(v_phi_1)*gen.normal();
+        gamma_sum++;
+      }
+      else Phi(k,d) = 0.0;
+    } // closes loop over tasks
+
+    theta(d) = gen.beta(pi.a_theta + gamma_sum, pi.b_theta + di.q - gamma_sum);
+  }
+}
+
 
 void update_sigma(const arma::mat &Phi, arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen)
 {

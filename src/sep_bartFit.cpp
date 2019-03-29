@@ -30,314 +30,292 @@ List sep_bartFit(arma::mat Y,
                  arma::mat X,
                  arma::mat X_pred,
                  List xinfo_list,
-                 int burn = 250, int nd = 1000, int m = 200, double kappa = 3, double nu = 1, double var_prob = 0.9)
+                 int burn = 250, int nd = 1000, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9, bool verbose = false)
 {
   // Random number generator, used in all draws.
   RNGScope scope;
   RNG gen;
-  
-  Rcout << "\n*****Into bart main\n";
   
   // Get parameters about our data
   size_t n_obs = X.n_rows;
   size_t n_pred = X_pred.n_rows;
   size_t q = Y.n_cols;
   size_t p = X.n_cols;
+  size_t n = Y.size(); // should be n_obs * q
+  int D = Y.n_cols; // we are fixing the number of basis functions to be D = q. One basis function per task, so Phi is the identity.
   
-  size_t n = Y.size(); // Should be n_obs * q
+  //Y.print();
+  arma::mat Y_orig = Y; // just a copy of the Y that is initially passed into the function
+  // Center and scale Y
+  arma::vec y_col_mean = arma::zeros<arma::vec>(q); // holds the original mean of each column of Y
+  arma::vec y_col_sd = arma::zeros<arma::vec>(q); // holds the original sd of each column of Y
+  arma::vec y_col_max = arma::zeros<arma::vec>(q); // holds the max of the scaled columns of Y
+  arma::vec y_col_min = arma::zeros<arma::vec>(q); // holds the min of the scaled columns of Y
   
-  // always center the Y's
-  arma::mat Y_orig = Y; // make a copy of Y. Probably never refer back to this again.
+  prepare_y(Y, y_col_mean, y_col_sd, y_col_max, y_col_min);
   
-  arma::vec y_col_mean(q);
-  arma::vec y_col_sd(q);
+  if(verbose == true) Rcpp::Rcout << "  Centered and scaled Y" << endl;
   
-  for(int k = 0; k < q; k++){
-    y_col_mean(k) = mean(Y.col(k));
-    Y.col(k) -= y_col_mean(k);
-    y_col_sd(k) = arma::stddev(Y.col(k));
-    Y.col(k) /= y_col_sd(k);
-  }
-  
-  Rcpp::Rcout << "Original column means of Y:" ;
-  for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << y_col_mean(k);
-  Rcpp::Rcout << endl;
-  
-  Rcpp::Rcout << "Original column sd of Y:";
-  for(size_t k = 0; k < q; k++) Rcpp::Rcout <<" " << y_col_sd(k);
-  Rcpp::Rcout << endl;
-  
-  // create a double (pointer) for both x and y
+  // create arrays (i.e. pointers for X, Y, X_pred, and delta)
   double* y_ptr = new double[n];
+  double* delta_ptr = new double[n];
   double* x_ptr = new double[n_obs * p];
   double* x_pred_ptr = new double[n_pred * p];
+  //double* delta_pred_ptr = new double[n_pred*q]; // just set all of these equal to 1
   
   for(size_t i = 0; i < n_obs; i++){
     for(size_t k = 0; k < q; k++){
-      //y_ptr[i + n_obs*k] = Y(i,k);
-      y_ptr[k + i*q] = Y(i,k); //
+      y_ptr[k + i*q] = Y(i,k);
+      if(Y(i,k) == Y(i,k)) delta_ptr[k + i*q] = 1;
+      else delta_ptr[k + i*q] = 0;
     }
     for(size_t j = 0; j < p; j++){
-      //x_ptr[i + n_obs*j] = X(i,j);
       x_ptr[j + i*p] = X(i,j);
     }
   }
   for(size_t i = 0; i < n_pred; i++){
     for(size_t j = 0; j < p; j++){
-      //x_pred_ptr[i + n_pred*j] = X_pred(i,j);
       x_pred_ptr[j + i*p] = X_pred(i,j);
     }
   }
-  Rcout << "created y_ptr, x_ptr, x_pred_ptr" << endl;
+  if(verbose == true) Rcpp::Rcout << "  Created pointers" << endl;
   
-  // Read-in and format the cut-points
+  // Read and format the cut-puts
   xinfo xi;
   xi.resize(p);
   for(size_t j = 0; j < p; j++){
-    NumericVector tmp = xinfo_list[j];
+    Rcpp::NumericVector tmp = xinfo_list[j];
     std::vector<double> tmp2;
     for(int jj = 0; jj < tmp.size(); jj++){
       tmp2.push_back(tmp[jj]);
     }
     xi[j] = tmp2;
   }
-  Rcout << "Created xi" << endl;
+  if(verbose == true) Rcpp::Rcout << "  Created cut-points" << endl;
   
-  // Inititalize Omega. For sep_bartFit Omega is always a diagonal matrix
-  arma::mat Omega = zeros<mat>(q,q);
-  Omega.eye();
-  arma::mat Sigma = zeros<mat>(q,q);
-  Sigma.eye();
-  // Inititalize the S = R'R, where R is the residual matrix.
-  arma::mat S = zeros<mat>(q,q);
-  //double s_kk = 0.0; // will hold the diagonal elements of S when we need them
-
-  // Set up the prior hyper-parameters
-  pinfo pi;
-  pi.pbd = 1.0; // prob of a birth/death move
-  pi.pb = 0.5; // prob of birth move given birth/death move
-  pi.alpha = 0.95; // prior probability that bottom node splies is alpha/(1 + d)^beta, d is depth
-  pi.beta = 2.0; // 2 for bart means it is harder to build big trees
-  pi.nu = nu;
-  pi.sigma_mu.clear();
-  pi.sigma_mu.reserve(q);
   
-  pi.sigma_hat.clear();
+  // introduce Phi and sigma
+  arma::mat Phi = arma::zeros<arma::mat>(q,D) ;
+  Phi.eye(); // in sep_bartFit, Phi is always the identity matrix. There are q latent basis functions, one for each task
+  arma::vec sigma = arma::ones<arma::vec>(q); // sigma(k) is the residual SD for task k
+  
+  // set up prior hyper-parameters
+  pinfo_slfm pi;
+  pi.pbd = 1.0; // probability of a birth/death move
+  pi.pb = 0.5; // probability of a birth move given birth/death move occurs
+  pi.alpha = 0.95;
+  pi.beta = 2.0;
+  pi.sigma_mu.clear(); // prior sd of the mu parameters for each tree in the D basis functions
+  pi.sigma_mu.reserve(D);
+  
+  pi.sigma_phi.clear(); // prior sd of the Phi parameters .. in sep_bartFit this is unused
+  pi.sigma_phi.reserve(q); // we model the *rows* of Phi independently, each row has slightly different variance term to be consistent with data
+  
+  pi.sigma_hat.clear(); // over-estimate of the residual variance for each task. usually will just be 1.
   pi.sigma_hat.reserve(q);
   
-  pi.lambda.clear();
+  pi.lambda.clear(); // scaling value for the scaled-inverse chi-square prior on residual variances
   pi.lambda.reserve(q);
-  // if p < n, we can set sigma_hat(k) to be the RMSE from fitting a linear model of Y.col(k) onto X
-  // For now, we just set it equal to 1 (this is the wbart default for p > n)
-  // Set-up the residual variance prior
+  pi.nu = nu; // df of the scaled-inverse chi-square prior on residual variances
+  
   double chisq_quantile = 0.0;
   Function qchisq("qchisq");
   NumericVector tmp_quantile = qchisq(Named("p") = 1.0 - var_prob, Named("df") = nu);
   chisq_quantile = tmp_quantile[0];
-  for(int k = 0; k < q; k++){
-    pi.sigma_hat[k] = stddev(Y.col(k));
-    pi.lambda[k] = (pi.sigma_hat[k] * pi.sigma_hat[k] * chisq_quantile)/nu;
-    pi.sigma_mu[k] = ( (Y.col(k).max() - Y.col(k).min())/(2.0 * kappa * sqrt( (double) m))); // This is the default in wbart
-  }
   
-  Rcpp::Rcout << "  pi.sigma_hat:" ;
-  for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.sigma_hat[k] ;
-  Rcpp::Rcout << endl;
-  
-  Rcpp::Rcout << "  pi.lambda:" ;
-  for(size_t k = 0; k < q; k++) Rcpp::Rcout<< " " << pi.lambda[k];
-  Rcpp::Rcout << endl;
-  
-  Rcpp::Rcout << "  pi.sigma_mu:" ;
-  for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.sigma_mu[k];
-  Rcpp::Rcout << endl;
-  
-  
-  
-
-  
-  // trees, data, and residuals
-  std::vector<std::vector<tree> > t_vec(q, std::vector<tree>(m));
-  
-  double* allfit = new double[n];
-  double* r_full = new double[n]; // r_full[k + i*q] is full residual of observation i, outcome k
-  double* r_partial = new double[n_obs]; // partial residual for observation i is r_partial[i]
-  double* ftemp = new double[n_obs]; // temporarily holds current fit of a specific tree
-  
-  double ybar = 0.0;
   for(size_t k = 0; k < q; k++){
-    ybar = arma::mean(Y.col(k));
-    for(size_t t = 0; t < m; t++){
-      t_vec[k][t].setm( ybar/ ( (double) m));
-    }
-    for(size_t i = 0; i < n_obs; i++){
-      allfit[k + i*q] = ybar;
-      r_full[k + i*q] = y_ptr[k + i*q] - allfit[k + i*q];
-    }
+    pi.sigma_hat[k] = 1.0; // all columns have variance 1
+    pi.lambda[k] = (pi.sigma_hat[k] * pi.sigma_hat[k] * chisq_quantile)/nu;
+  }
+  for(size_t d = 0; d < D; d++) pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( (double) m));
+  
+  if(verbose == true) Rcpp::Rcout << "Finished setting pi" << endl;
+  // Set up trees, data, and residuals
+  std::vector<std::vector<tree> > t_vec(D, std::vector<tree>(m));
+  
+  double* allfit = new double[n]; // allfit[k + i*q] is estimated fit of i^th training observation, k^th task
+  double* ufit = new double[n_obs*D]; // ufit[d + i*D] is estimated fit of i^th observation, d^th basis
+  double* ftemp = new double[n_obs]; // temporariliy holds current fit of a single tree
+  
+  double* allfit_pred = new double[n_pred*q]; // allfit_pred[k + i*q] is estimated fit of i^th test observation, k^th task
+  double* ufit_pred = new double[n_pred*D]; // ufit_pred[d + i*D] is estimated fit of i^th test observation, d^th basis function
+  double* ftemp_pred = new double[n_pred]; // temporarily holds fit
+  
+  // note that all of the columns have been centered
+  // will set the terminal node parameter of each tree to be 0 to begin
+  for(size_t d = 0; d < D; d++){
+    for(size_t t = 0; t < m; t++) t_vec[d][t].setm(0.0);
   }
   for(size_t i = 0; i < n_obs; i++){
-    r_partial[i] = 0.0;
+    for(size_t d = 0; d < D; d++) ufit[d + i*D] = 0.0;
+    for(size_t k = 0; k < q; k++) allfit[k + i*q] = 0.0;
     ftemp[i] = 0.0;
   }
   
-  dinfo di;
-  di.n = n_obs;
-  di.p = p;
-  di.q = q;
-  di.k = 0;
-  di.x = &x_ptr[0];
-  di.r_f = &r_full[0];
-  di.r_p = &r_partial[0];
+  // initialize allfit_pred and ufit_pred
+  for(size_t i = 0; i < n_pred; i++){
+    ftemp_pred[i] = 0.0;
+    for(size_t d = 0; d < D; d++) ufit_pred[d + i*D] = 0.0;
+    for(size_t k = 0; k < q; k++) allfit_pred[k + i*q] = 0.0;
+  }
   
-  dinfo dip;
-  dip.n = n_pred;
+  dinfo_slfm di;
+  di.p = p;
+  di.n = n_obs;
+  di.q = q;
+  di.D = D;
+  di.d = 0;
+  di.x = &x_ptr[0];
+  di.y = &y_ptr[0];
+  di.delta = &delta_ptr[0];
+  di.af = &allfit[0];
+  di.uf = &ufit[0];
+  
+  dinfo_slfm dip;
   dip.p = p;
+  dip.n = n_pred;
   dip.q = q;
-  dip.k = 0;
+  dip.d = 0;
   dip.x = &x_pred_ptr[0];
   
-  Rcpp::Rcout << "initialized pointers for residuals" << endl;
-
   
-  // We run the main procedure using the centered and scaled responses
-  // std_fit_samples holds the fits for the centered and scaled data
-  // fit_samples will re-scale and then re-center back to the original scale of the data
-  // For Omega we need to convert back to the original scale. Each std_sigma_(k,k') must be multiplied by the original
-  // standard deviation of Y_k and Y_k'.
+  if(verbose == true) Rcpp::Rcout << "  Created arrays to hold residuals, etc." << endl;
   
-  // Samples
-  arma::cube std_fit_samples = zeros<cube>(n_obs, q, nd);
-  arma::cube fit_samples = zeros<cube>(n_obs, q, nd); // fit_samples(i,k,iter) = std_fit_samples(i,k,iter) * y_col_sd(k) + y_col_mean(k)
-  arma::cube std_Omega_samples = zeros<cube>(q,q,nd); // Omega samples on the standardized scale
-  arma::cube Omega_samples = zeros<cube>(q,q,nd); // Omega_samples(k,kk,iter) = std_Omega_samples(k,kk,iter)/y_col_sd(k)*y_col_sd(kk)
-  arma::cube Sigma_samples = zeros<cube>(q,q,nd);
-  // should we also compute Sigma samples?
+  // Remember we run the main BART procedure using centered and scaled responses
+  arma::cube f_train_samples = arma::zeros<arma::cube>(n_obs, q, nd); // f_train_samples(i,k,iter) = y_col_sd(k) * allfit[k + i*q] + y_col_mean(k)
+  arma::cube f_test_samples = arma::zeros<arma::cube>(n_pred, q, nd); // f_test_samples(i,k,iter) = y_col_sd(k) * allfit_pred[k + i*q] + y_col_mean(k)
+  arma::mat sigma_samples = arma::zeros<arma::mat>(q, nd);  //
   
+  // note: since Phi is being fixed at the identity, there is a single basis function for each f. So u_train and u_test would be redundant with f_train and f_test.
   
-  // diagnostics
-  arma::cube S_samples = zeros<cube>(q,q,nd+burn); // save S = R'R for each iteration. Hope this is not too close to 0
-  arma::mat alpha_samples = zeros<mat>(nd+burn, m*q); // alpha_samples(iter,t+m*k) is alpha for iteration iter,tree t, outcome k
-  arma::mat tree_size_samples = zeros<mat>(nd+burn, m*q); // tree_depth_samples(iter,t+m*k) depth of tree t, outcome k for iteration iter
+  //arma::cube u_train_samples = arma::zeros<arma::cube>(n_obs, D, nd); // u_train_samples(i,d,iter) = ufit[d+i*D] ... this is on standardized scale
+  //arma::cube u_test_samples = arma::zeros<arma::cube>(n_pred, D, nd); // u_test_samples(i,d,iter) = ufit_pre[d+i*D] ... this is on the standardized scale
   
-  // do MCMC here
-  // inside the MCMC loop we can do the re-scaling and re-centering of the samples
+  //arma::mat sigma_samples = arma::zeros<arma::mat>(q, nd); // for residual standard deviations. each row represents a task. sigma(k,iter) = y_col_sd(k) * sigma[k]
+  //arma::cube Phi_samples = arma::zeros<arma::cube>(q, D, nd); // since we are keeping Phi fixed to the I_q, there is no need to track Phi_samples
   
-  Rcpp::Rcout << "Starting MCMC" << endl;
+  if(verbose == true) Rcpp::Rcout << "Starting MCMC" << endl;
   time_t tp;
   int time1 = time(&tp);
   for(int iter = 0; iter < (nd + burn); iter++){
-    if(iter < burn & iter%50 == 0) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << endl;
-    else if( (iter > burn & iter%50 == 0) || (iter == burn)) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" << endl;
-    if(iter%100 == 0) Rcpp::checkUserInterrupt(); // check for interruption
+    if(iter < burn & iter%50 == 0){
+      if(verbose == true) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << endl;
+    }
+    else if( (iter > burn & iter%50 == 0) || (iter == burn)){
+      if(verbose == true) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" << endl;
+    }
+    if(iter%100 == 0) Rcpp::checkUserInterrupt();
     
-    for(size_t k = 0; k < q; k++){
-      di.k = k; // update k in di
+    // update the trees within each basis functions.
+    
+    for(size_t d = 0; d < D; d++){
+      di.d = d; // in di, this lets us track which basis function we are updating
       for(size_t t = 0; t < m; t++){
-        fit(t_vec[k][t], xi, di, ftemp); // Fills in ftemp to hold current fitted values in tree t for outcome k
+        fit(t_vec[d][t], xi, di, ftemp); // fills in ftemp with current fitted values in tree t for basis function d
         for(size_t i = 0; i < n_obs; i++){
-          if(ftemp[i] != ftemp[i]){
-            Rcpp::Rcout << "outcome " << k << " tree " << t << " observation " << i << endl;
-            Rcpp::stop("nan in ftemp");
-          }
-          allfit[k + i*di.q] = allfit[k + i*di.q] - ftemp[i]; // temporarily remove fit of tree t from allfit
-          r_partial[i] = y_ptr[k + i*di.q] - allfit[k + i*di.q]; // compute r_partial
-        } // closes loop over observations checking for nan in ftemp
-        // now do the birth/death move
-        alpha_samples(iter, t + m*k) = bd_multi(t_vec[k][t],Omega,xi, di,pi,gen);
-        drmu_multi(t_vec[k][t], Omega, xi, di, pi, gen);
+          if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp!");
+          ufit[d + i*D] -=ftemp[i]; // temporarily remove fit of tree t from overall fit of the basis function d
+          for(size_t k = 0; k < q; k++) allfit[k + i*q] -= Phi(k,d) * ftemp[i]; // temporariliy removes fit of tree t, basis function d from allfit
+        } // closes loop over observations
         
-        // Update the fit
-        fit(t_vec[k][t], xi, di, ftemp); // ftemp now has the new fitted values from tree t for outcome k
+        bd_slfm(t_vec[d][t], Phi, sigma, xi, di, pi, gen);
+        drmu_slfm(t_vec[d][t], Phi, sigma, xi, di, pi, gen);
+        
+        // now that we have new tree, we need to adjust ufit and allfit, since we had removed fit from this tree earlier
+        fit(t_vec[d][t], xi, di, ftemp);
         for(size_t i = 0; i < n_obs; i++){
-          if(ftemp[i] != ftemp[i]){
-            Rcpp::Rcout << "outcome " << k << " tree " << t << " observation " << i << endl;
-            Rcpp::stop("nan in ftemp");
-          }
-          allfit[k + i*di.q] += ftemp[i]; // allfit[k+i*di.q] previously had fit from (m-1) trees.
-          r_full[k + i*di.q] = y_ptr[k + i*di.q] - allfit[k + i*di.q];
-        }
-        tree_size_samples(iter, t + m*k) = t_vec[k][t].treesize();
-      } // closes loop over trees
-    } // closes loop over outcomes
+          if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp!");
+          ufit[d + i*D] += ftemp[i]; // add back fit of tree t to fit of basis function d
+          for(size_t k = 0; k < q; k++) allfit[k + i*q] += Phi(k,d) * ftemp[i]; // add back fit of tree t, basis function d to allfit
+        } // closes loop over obesrvations for updating allfit and ufit
+      } // closes loop over the trees within basis function d
+    } // closes loop over the basis functions
     
-    // Now that trees have been updated it's time to update Omega
-    // Let sigma_k be residal sd for outcome k (so omega_kk = 1/(sigma_k * sigma_k)
-    // A priori sigma2_k ~ nu * lambda/chisq_nu = IG(nu/2, nu * lambda/2)
-    // A posteriori sigma2_k ~ IG( (nu + n_obs)/2, (nu * lambda + S(k,k))/2) = (nu * lamba + S(k,k)) * IG( (nu + n_obs)/2, 1/2)
-    // So to draw sigma2_k we just draw chisq_(nu + n_obs), invert it, and multipy it by (nu*lambda + S(k,k))
-    // To draw omega we draw chisq(nu + n_obs) and divide it by (nu*lambda + S(k,k))
+    // Since Phi is the identity, we do not have to update Phi
+    //update_Phi_gaussian(Phi, sigma, di, pi, gen);
     
-    S.zeros();
-    for(size_t k = 0; k < q; k++){
-      for(size_t kk = k; kk < q; kk++){
-        for(int i = 0; i < n_obs; i++){
-          S(k,kk) += r_full[k + i*q] * r_full[kk + i*q];
-        }
-        S(kk,k) = S(k,kk);
-      }
-      Omega(k,k) = gen.chi_square(pi.nu + di.n)/(S(k,k) + pi.nu * pi.lambda[k]);
-    }
-    S_samples.slice(iter) = S;
+    // This step is somewhat redundant but to be safe, we'll do it anyway
+    // This updates allfit after ufit and Phi have been updated.
+    for(size_t i = 0; i < n_obs; i++){
+      for(size_t k = 0; k < q; k++){
+        allfit[k + i*q] = 0.0;
+        for(size_t d = 0; d < D; d++) allfit[k + i*q] += Phi(k,d) * ufit[d + i*D];
+      } // closes loop over the tasks
+    } // closes loop over observations
     
+    // !! allfit has been updated
     
+    // update the residual variances
+    update_sigma(Phi, sigma, di, pi, gen);
     
-    // save the samples
-    //[SKD] 16 January 2019: eventually add a thinning step here.
-    // if(iter >= burn & (iter - 1) %% keep_every == 0)
+    // Now save the samples
     if(iter >= burn){
+      
+      // save training fit
+      for(size_t i = 0; i < n_obs; i++){
+        for(size_t k = 0; k < q; k++) f_train_samples(i,k,iter-burn) = y_col_sd(k) * allfit[k + i*q] + y_col_mean(k);
+        //for(size_t d = 0; d < D; d++) u_train_samples(i,d,iter-burn) = ufit[d + i*D];
+      }
+      
+      // save the Phi's and sigmas
       for(size_t k = 0; k < q; k++){
-        for(size_t i = 0; i < n_obs; i++){
-          std_fit_samples(i,k,iter-burn) = allfit[k + i*q];
-          fit_samples(i,k,iter-burn)= y_col_sd(k)*allfit[k + i*q] + y_col_mean(k);
+        //for(size_t d = 0; d < D; d++) Phi_samples(k,d,iter-burn) = Phi(k,d) * y_col_sd(k);
+        sigma_samples(k,iter-burn) = y_col_sd(k) * sigma(k);
+      }
+      
+      // save test output. start by clearing all of the elements in ufit_pred
+      for(size_t d = 0; d < D; d++){
+        for(size_t i = 0; i < n_pred; i++) ufit_pred[d + i*D] = 0.0; // reset ufit_pred
+        for(size_t t= 0; t < m; t++){
+          fit(t_vec[d][t], xi, dip, ftemp_pred); // get the fit of tree t for basis function d for the test data
+          for(size_t i = 0; i < n_pred; i++) ufit_pred[d + i*D] += ftemp_pred[i]; // update the appropriate elements in ufit_pred
         }
       }
-      std_Omega_samples.slice(iter-burn) = Omega;
-      Sigma = arma::inv_sympd(Omega);
-      
       for(size_t k = 0; k < q; k++){
-        for(size_t kk = k; kk < q; kk++){
-          Omega_samples(k,kk,iter-burn) = Omega(k,kk)/(y_col_sd(k) * y_col_sd(kk));
-          Omega_samples(kk,k,iter-burn) = Omega_samples(k,kk,iter-burn);
-          
-          Sigma_samples(k,kk,iter-burn) = y_col_sd(k) * y_col_sd(kk) * Sigma(k,kk);
-          Sigma_samples(kk,k,iter-burn) = Sigma_samples(k,kk,iter-burn);
-          
+        for(size_t i = 0; i < n_pred; i++){
+          allfit_pred[k + i*q] = 0.0; // reset allfit_pred[k+i*q];
+          for(size_t d = 0; d < D; d++) allfit_pred[k+i*q] += Phi(k,d) * ufit_pred[d + i*D];
         }
       }
-      // potentially also do the inversion and get Sigma samples
-      
-      //Sigma_samples.slice(iter) = arma::inv_sympd(Omega_samples.slice(iter));
-    }
+      for(size_t i = 0; i < n_pred; i++){
+        for(size_t k = 0; k < q; k++) f_test_samples(i,k,iter-burn) = y_col_sd(k) * allfit_pred[k+i*q] + y_col_mean(k);
+        //for(size_t d = 0; d < D; d++) u_test_samples(i,d,iter-burn) = ufit_pred[d + i*D];
+      }
+    } // closes if checking that iter > burn and that we are saving samples
     
   } // closes main MCMC loop
-  Rcpp::Rcout << "Finished MCMC" << endl;
+  if(verbose == true) Rcpp::Rcout << "Finished MCMC" << endl;
   int time2 = time(&tp);
-  Rcout << "time for MCMC: " << time2 - time1 << endl;
-
+  if (verbose == true) Rcout << "time for MCMC: " << time2 - time1 << endl;
   
-  
-  // clean up some memory
-  delete[] r_full;
-  delete[] r_partial;
-  delete[] allfit;
-  delete[] ftemp;
-  
+  delete[] y_ptr;
+  delete[] delta_ptr;
   delete[] x_ptr;
   delete[] x_pred_ptr;
-  delete[] y_ptr;
   
-  List results;
+  delete[] allfit;
+  delete[] ufit;
+  delete[] allfit_pred;
+  delete[] ufit_pred;
+  delete[] ftemp;
+  delete[] ftemp_pred;
+  
+  Rcpp::List results;
+  results["Y_orig"] = Y_orig;
   results["Y"] = Y;
-  results["X"] = X;
+  results["y_col_max"] = y_col_max;
+  results["y_col_min"] = y_col_min;
   results["y_col_mean"] = y_col_mean;
   results["y_col_sd"] = y_col_sd;
   
-  results["fit_samples"] = fit_samples;
-  results["Omega_samples"] = Omega_samples;
-  results["Sigma_samples"] = Sigma_samples;
-  results["alpha_samples"] = alpha_samples;
-  results["tree_size_samples"] = tree_size_samples;
-  results["S_samples"] = S_samples;
+  results["f_train_samples"] = f_train_samples;
+  results["f_test_samples"] = f_test_samples;
+  //results["u_train_samples"] = u_train_samples;
+  //results["u_test_samples"] = u_test_samples;
+  results["sigma_samples"] = sigma_samples;
+  //results["Phi"] = Phi_samples;
+  results["time"] = time2 - time1;
+  
   return(results);
   
 }

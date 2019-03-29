@@ -21,12 +21,13 @@
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-Rcpp::List slfm_bartFit(arma::mat Y,
-                        arma::mat X,
-                        arma::mat X_pred,
-                        Rcpp::List xinfo_list,
-                        int burn = 250, int nd = 1000,
-                        int D = 5, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9, bool verbose = false)
+Rcpp::List slfm_bartFit_sparse(arma::mat Y,
+                               arma::mat X,
+                               arma::mat X_pred,
+                               Rcpp::List xinfo_list,
+                               double a_theta = 1.0, double b_theta = 1.0, // hyper-parameter for the Beta prior on sparsity stuff
+                               int burn = 250, int nd = 1000,
+                               int D = 10, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9, bool verbose = false)
 {
   Rcpp::RNGScope scope;
   RNG gen;
@@ -87,10 +88,6 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   }
   if(verbose == true) Rcpp::Rcout << "  Created cut-points" << endl;
   
-  // Introduce Phi and sigma
-  arma::mat Phi = arma::ones<arma::mat>(q,D); // Phi(k,d) tells us how much u_d contribute to f_k
-  arma::vec sigma = arma::ones<arma::vec>(q); // sigma(k) is the residual SD for task k
-  
   // set up prior hyper-parameters
   pinfo_slfm pi;
   pi.pbd = 1.0; // probability of a birth/death move
@@ -110,20 +107,22 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   pi.lambda.reserve(q);
   pi.nu = nu; // df of the scaled-inverse chi-square prior on residual variances
   
+  pi.a_theta = a_theta;
+  pi.b_theta = b_theta;
   
-  for(size_t d = 0; d < D; d++){
-    pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( ((double) m) * ((double) D)));
-  }
+  for(size_t d = 0; d < D; d++) pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( ((double) m) * ((double) D)));
   
   // now set sigma_phi. This requires calling the qchisq function from R
+  // for the sparse version, the degrees of freedom is actually random.
+  // if we leave it at D, then sigma_phi will be much much too small (essentially shrink the fit of f_k too aggressively)
+  // better to use something else like a_theta * D/(a_theta + b_theta)
   double chisq_quantile = 0.0;
   Function qchisq("qchisq");
-  //NumericVector tmp_quantile = qchisq(Named("p") = 1.0 - var_prob, Named("df") = nu);
-  NumericVector tmp_quantile = qchisq(Named("p") = var_prob, Named("df") = D);
+  //NumericVector tmp_quantile = qchisq(Named("p") = var_prob, Named("df") = D);
+  NumericVector tmp_quantile = qchisq(Named("p") = var_prob, Named("df") =  (double) D * a_theta/(a_theta + b_theta));
   chisq_quantile = tmp_quantile[0];
-  for(size_t k = 0; k < q; k++){
-    pi.sigma_phi[k] = sqrt( ((double) D)/chisq_quantile ) * (y_col_max(k) - y_col_min(k))/(y_col_max.max() - y_col_min.min());
-  }
+  for(size_t k = 0; k < q; k++) pi.sigma_phi[k] = sqrt( ((double) D)/chisq_quantile ) * (y_col_max(k) - y_col_min(k))/(y_col_max.max() - y_col_min.min());
+  
   // now set sigma_hat and lambda
   tmp_quantile = qchisq(Named("p") = 1 - var_prob, Named("df") = nu);
   chisq_quantile = tmp_quantile[0];
@@ -138,20 +137,36 @@ Rcpp::List slfm_bartFit(arma::mat Y,
     Rcpp::Rcout << "  pi.sigma_mu:" ;
     for(size_t d = 0; d < D; d++) Rcpp::Rcout << " " << pi.sigma_mu[d] ;
     Rcpp::Rcout << endl;
-  
+    
     Rcpp::Rcout << "  pi.sigma_phi:";
     for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " <<  pi.sigma_phi[k];
     Rcpp::Rcout << endl;
-  
+    
     Rcpp::Rcout << "  pi.sigma_hat:" ;
     for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.sigma_hat[k] ;
     Rcpp::Rcout << endl;
-  
+    
     Rcpp::Rcout << "  pi.lambda:" ;
     for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << pi.lambda[k] ;
     Rcpp::Rcout << endl;
   }
 
+
+  // Introduce Phi, sigma, and theta
+  //arma::mat Phi = arma::ones<arma::mat>(q,D); // Phi(k,d) tells us how much u_d contribute to f_k
+  arma::mat Phi(q,D);
+  arma::vec sigma = arma::ones<arma::vec>(q); // sigma(k) is the residual SD for task k
+  arma::vec theta(D); // there is a theta for each basis function
+  // Initialize Phi and theta from their respective priors
+  
+  for(size_t d = 0; d < D; d++){
+    theta(d) = gen.beta(a_theta, b_theta);
+    for(size_t k = 0; k < q; k++){
+      if(gen.uniform() < theta(d)) Phi(k,d) = pi.sigma_phi[k] * gen.normal();
+      else Phi(k,d) = 0.0;
+    }
+  }
+  
   // [SKD]: If done correctly, pi.sigma_hat is 1 for every outcome, pi.lambda is constant, and pi.sigma_mu constant
   
   // Set up trees, data, and residuals
@@ -220,18 +235,17 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   
   arma::mat sigma_samples = arma::zeros<arma::mat>(q, nd); // for residual standard deviations. each row represents a task. sigma(k,iter) = y_col_sd(k) * sigma[k]
   arma::cube Phi_samples = arma::zeros<arma::cube>(q, D, nd); // Phi_samples(k,d,iter) = y_col_sd(k) * Phi(k,d)... remember we have to rescale!
-
+  arma::mat theta_samples = arma::zeros<arma::mat>(D, nd); // for the sparsity parameter for each basis function
   
   if(verbose == true) Rcpp::Rcout << "Starting MCMC" << endl;
   time_t tp;
   int time1 = time(&tp);
   for(int iter = 0; iter < (nd + burn); iter++){
-    if(iter < burn & iter%50 == 0){
-      if(verbose == true) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << endl;
+    if(verbose == true){
+      if(iter < burn & iter%50 == 0) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << endl;
+      else if( (iter > burn & iter%50 == 0) || (iter == burn)) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" << endl;
     }
-    else if( (iter > burn & iter%50 == 0) || (iter == burn)){
-      if(verbose == true) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" << endl;
-    }
+
     if(iter%100 == 0) Rcpp::checkUserInterrupt();
     
     // update the trees within each basis functions.
@@ -260,7 +274,8 @@ Rcpp::List slfm_bartFit(arma::mat Y,
     } // closes loop over the basis functions
     
     // update the loadings Phi
-    update_Phi_gaussian(Phi, sigma, di, pi, gen);
+    //update_Phi_gaussian(Phi, sigma, di, pi, gen);
+    update_Phi_ss(Phi, theta, sigma, di, pi, gen);
 
     // now that we have updated both the basis functions and Phi, we should update allfit
     for(size_t i = 0; i < n_obs; i++){
@@ -284,11 +299,14 @@ Rcpp::List slfm_bartFit(arma::mat Y,
         for(size_t d = 0; d < D; d++) u_train_samples(i,d,iter-burn) = ufit[d + i*D];
       }
 
-      // save the Phi's and sigmas
-      for(size_t k = 0; k < q; k++){
-        for(size_t d = 0; d < D; d++) Phi_samples(k,d,iter-burn) = Phi(k,d) * y_col_sd(k);
-        sigma_samples(k,iter-burn) = y_col_sd(k) * sigma(k);
+      // save the Phi's and sigmas and theta's
+      for(size_t d = 0; d < D; d++){
+        theta_samples(d,iter-burn) = theta(d);
+        for(size_t k = 0; k < q; k++) Phi_samples(k,d,iter-burn) = Phi(k,d) * y_col_sd(k);
       }
+      
+      // save the sigmas
+      for(size_t k = 0; k < q; k++) sigma_samples(k,iter-burn) = y_col_sd(k) * sigma(k);
       
       // save test output. start by clearing all of the elements in ufit_pred
       for(size_t d = 0; d < D; d++){
@@ -313,7 +331,7 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   } // closes main MCMC loop
   if(verbose == true) Rcpp::Rcout << "Finished MCMC" << endl;
   int time2 = time(&tp);
-  if (verbose == true) Rcout << "time for MCMC: " << time2 - time1 << endl;
+  if(verbose == true) Rcout << "time for MCMC: " << time2 - time1 << endl;
   
   delete[] y_ptr;
   delete[] delta_ptr;
@@ -340,7 +358,8 @@ Rcpp::List slfm_bartFit(arma::mat Y,
   results["u_train_samples"] = u_train_samples;
   results["u_test_samples"] = u_test_samples;
   results["sigma_samples"] = sigma_samples;
-  results["Phi"] = Phi_samples;
+  results["Phi_samples"] = Phi_samples;
+  results["theta_samples"] = theta_samples;
   results["time"] = time2 - time1;
   
   return(results);

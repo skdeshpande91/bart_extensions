@@ -33,7 +33,7 @@ Rcpp::List uni_bartFit(arma::vec Y,
                  arma::mat X,
                  arma::mat X_pred,
                  Rcpp::List xinfo_list,
-                 int burn = 250, int nd = 1000, int m = 200, double kappa = 3, double nu = 1, double var_prob = 0.9)
+                 int burn = 250, int nd = 1000, int m = 200, double kappa = 2, double nu = 3, double var_prob = 0.9)
 {
   // Random number generator, used in all draws.
   Rcpp::Rcout << "Entered uni_bartFit" << endl;
@@ -133,9 +133,11 @@ Rcpp::List uni_bartFit(arma::vec Y,
   std::vector<tree> t_vec(m);
   
   double* allfit = new double[n]; // allfit[i] is fit of m trees for observation i
+  double* allfit_pred = new double[n_pred];
   double* r_full = new double[n]; // r_full[i] is full residual for observation i
   double* r_partial = new double[n_obs]; // r_partial[i] is partial residual for observation i
   double* ftemp = new double[n_obs];
+  double* ftemp_pred = new double[n_pred];
   double ybar = arma::mean(Y); // used to set initial values of allfit. should be 0
   for(size_t t = 0; t < m; t++){
     t_vec[t].setm( ybar/ ( (double) m));
@@ -168,18 +170,11 @@ Rcpp::List uni_bartFit(arma::vec Y,
   
   Rcpp::Rcout << "  initialized pointers for residuals" << endl;
   
-  // We run the main procedure using the centered and scaled responses
-  // std_fit_samples: holds the fits for the centered and scaled data
-  // fit_samples: re-scale and re-center back to the original scale of the data
-  // For omega: we need to re-covert to the original scale
-  // std_omega_samples: holds the draws of omega that are on the standardized scale
-  // omega_samples: holds draws of omega on the original scale. obtained by dividing
-  //arma::mat std_fit_samples = zeros<mat>(nd, n_obs);
-  //arma::mat fit_samples = zeros<mat>(nd, n_obs); // fit_samples(iter,i) = y_col_mean + y_col_sd * std_fit_samples(i,iter)
-  
-  arma::mat std_fit_samples = zeros<mat>(n_obs, nd); //
-  arma::mat fit_samples = zeros<mat>(n_obs, nd); // fit_samples(i,iter) = y_col_mean + y_col_sd * std_fit_samples(i,iter)
-  arma::vec std_omega_samples = zeros<vec>(nd);
+  // We run the main procedure using the centered and scaled responses.
+  // we must output to the original scale of the data
+
+  arma::mat train_samples = arma::zeros<arma::mat>(n_obs, nd); // train_samples(i,iter) = y_col_mean + y_col_sd * allfit[i];
+  arma::mat test_samples = arma::zeros<arma::mat>(n_pred, nd); // test_samples(i,iter) = y_col_mean + y_col_sd * allfit_pred[i];
   arma::vec omega_samples = zeros<vec>(nd); // omega_samples(iter) = std_omega_samples(iter)/y_col_sd
   arma::vec sigma_samples = zeros<vec>(nd); // sigma_samples(iter) = 1.0/sqrt(omega_samples(iter));
   
@@ -199,9 +194,7 @@ Rcpp::List uni_bartFit(arma::vec Y,
     
     // Updating trees
     for(size_t t = 0; t < m; t++){
-      
-      // Get the current fit of the tree
-      fit(t_vec[t], xi, di, ftemp);
+      fit(t_vec[t], xi, di, ftemp); // Get the current fit of the tree
       for(size_t i = 0; i < n_obs; i++){
         if(ftemp[i] != ftemp[i]){
           Rcpp::Rcout << "tree " << t << " observation " << i << endl;
@@ -211,12 +204,11 @@ Rcpp::List uni_bartFit(arma::vec Y,
         r_partial[i] = y_ptr[i] - allfit[i];
       } // closes loop over observations updating allfit and r_partial
       
-      // Do the birth/death move
-      alpha_samples(iter,t) = bd_uni(t_vec[t], omega, xi, di, pi, gen);
-      // Draw the new values of the mu parameters
-      drmu_uni(t_vec[t], omega, xi, di, pi, gen);
-      // Update the fit
-      fit(t_vec[t], xi, di, ftemp);
+      
+      alpha_samples(iter,t) = bd_uni(t_vec[t], omega, xi, di, pi, gen); // Do the birth/death move
+      drmu_uni(t_vec[t], omega, xi, di, pi, gen); // Draw the new values of the mu parameters
+      fit(t_vec[t], xi, di, ftemp); // Update the fit
+      
       for(size_t i = 0; i < n_obs; i++){
         if(ftemp[i] != ftemp[i]){
           Rcpp::Rcout << "tree " << t << " observation " << i << endl;
@@ -230,27 +222,27 @@ Rcpp::List uni_bartFit(arma::vec Y,
     
     // Now we update omega
     // A priori sigma2 ~ (nu * lambda)/chisq_nu = IG(nu/2, (nu * lambda)/2)
-    // A posterior sigma2 ~ IG( (nu + n_obs)/2, (nu*lambda + S)/2) = (nu * lambda + S) * inv_chisq_(nu + n_obs)
-    S = 0;
-    for(size_t i = 0; i < n_obs; i++){
-      S += r_full[i] * r_full[i];
-    }
+    // A posteriori sigma2 ~ IG( (nu + n_obs)/2, (nu*lambda + S)/2) = (nu * lambda + S) * inv_chisq_(nu + n_obs)
+    S = 0.0;
+    for(size_t i = 0; i < n_obs; i++) S += r_full[i] * r_full[i];
     omega = gen.chi_square(pi.nu + di.n)/(S + pi.nu * pi.lambda[0]);
-    
-    
     // now save the samples
     if(iter >= burn){
-      for(size_t i = 0; i < n_obs; i++){
-        std_fit_samples(i,iter-burn) = allfit[i];
-        fit_samples(i,iter-burn) = y_col_sd * allfit[i] + y_col_mean;
-        //std_fit_samples(iter-burn,i) = allfit[i];
-        //fit_samples(iter-burn,i) = y_col_sd * allfit[i] + y_col_mean;
-      }
-      std_omega_samples(iter-burn) = omega;
+      for(size_t i = 0; i < n_obs; i++) train_samples(i,iter-burn) = y_col_sd * allfit[i] + y_col_mean;
       omega_samples(iter-burn) = omega/(y_col_sd * y_col_sd);
       sigma_samples(iter-burn) = y_col_sd * 1.0/sqrt(omega);
-    }
-    
+      
+      // now get the out of sample predictions
+      if(dip.n > 0){
+        for(size_t i = 0; i < dip.n; i++) allfit_pred[i] = 0.0;// reset everything in allfit_pred
+        // loop over trees, get the fit, and update allfit_pred
+        for(size_t t = 0; t < m; t++){
+          fit(t_vec[t], xi, dip, ftemp_pred); // got the fit of tree t
+          for(size_t i = 0; i < n_pred; i++) allfit_pred[i] += ftemp_pred[i]; // update allfit_pred!
+        }
+        for(size_t i = 0; i < dip.n; i++) test_samples(i,iter-burn) = allfit_pred[i] * y_col_sd + y_col_mean; // now write to the final output
+      }
+    } // closes if checking that iter >= burn and we need to save the samples
   } // closes MCMC loop
   Rcpp::Rcout << "Finished MCMC" << endl;
   int time2 = time(&tp);
@@ -260,7 +252,9 @@ Rcpp::List uni_bartFit(arma::vec Y,
   delete[] r_full;
   delete[] r_partial;
   delete[] allfit;
+  delete[] allfit_pred;
   delete[] ftemp;
+  delete[] ftemp_pred;
   
   delete[] x_ptr;
   delete[] x_pred_ptr;
@@ -271,8 +265,9 @@ Rcpp::List uni_bartFit(arma::vec Y,
   results["Y_orig"] = Y;
   results["y_col_mean"] = y_col_mean;
   results["y_col_sd"] = y_col_sd;
-  results["fit_samples"] = fit_samples;
-  results["omega_samples"] = omega_samples;
+  results["train_samples"] = train_samples;
+  results["test_samples"] = test_samples;
+  //results["omega_samples"] = omega_samples;
   results["sigma_samples"] = sigma_samples;
   results["alpha_samples"] = alpha_samples;
   results["tree_size_samples"] = tree_size_samples;

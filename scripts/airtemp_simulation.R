@@ -2,7 +2,7 @@ library(Rcpp)
 library(RcppArmadillo)
 sourceCpp("src/slfm_bart.cpp")
 
-load("~/Dropbox/Broderick_Group/bart_extensions/data/airtemp.RData")
+load("data/airtemp.RData")
 
 m_list <- c(1, 5, 10, 25, 50, 100, 200)
 D_list <- c(5, 10, 25, 50)
@@ -26,11 +26,11 @@ for(D_ix in 1:length(D_list)){
   dimnames(fit$f_test_samples) <- list(c(), colnames(Y), c())
   dimnames(fit$sigma_samples) <- list(colnames(Y),c())
   method <- method_list[D_ix]
+  time[method] <- fit$time
   for(x in colnames(Y)){
     train_index <- which(!is.na(Y[,x]))
     train_smse[method, x] <- mean( (air_temp[train_index,x] - rowMeans(fit$f_test_samples[train_index,x,]))^2, na.rm = TRUE)/var(air_temp[,x], na.rm = TRUE)
     sigma[method,x] <- mean(fit$sigma_samples[x,])
-    time[x] <- fit$time
   }
   
   test_smse[method, "CAM"] <- mean( (air_temp[cam_test_index,"CAM"] - rowMeans(fit$f_test_samples[cam_test_index,"CAM",]))^2, na.rm = TRUE)/var(air_temp[,"CAM"],na.rm = TRUE)

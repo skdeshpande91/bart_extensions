@@ -4,6 +4,34 @@ library(RcppArmadillo)
 source("scripts/makeCutpoints.R")
 
 
+
+sourceCpp("src/sep_bartFit.cpp")
+
+load("data/toy_example.RData")
+
+
+cutpoints <- makeCutpoints(X_train, gridlen = 10000)
+
+sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints, verbose = TRUE)
+
+Y_missing <- Y
+Y_missing[1:10,1] <- NA
+sep_fit_missing <- sep_bartFit(Y_missing, X_train, X_test, cutpoints, verbose = TRUE)
+
+
+# RMSE
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(sep_fit$f_test_samples[,1,]))^2))
+sqrt(mean( (c(f1_test_0, f1_test_1) - rowMeans(sep_fit_missing$f_test_samples[,1,]))^2))
+
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(sep_fit$f_test_samples[,2,]))^2))
+sqrt(mean( (c(f2_test_0, f2_test_1) - rowMeans(sep_fit_missing$f_test_samples[,2,]))^2))
+
+sqrt( mean( (Y[,1] - rowMeans(sep_fit_missing$f_train_samples[,1,]))^2))
+
+plot(X_train[,1], rowMeans(sep_fit$f_train_samples[,1,]))
+
+# Don't proceed below 28 March 2019
+
 sourceCpp("src/sep_bartFit.cpp")
 sourceCpp("src/slfm_bart.cpp")
 

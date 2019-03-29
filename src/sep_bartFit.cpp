@@ -122,12 +122,12 @@ List sep_bartFit(arma::mat Y,
   Function qchisq("qchisq");
   NumericVector tmp_quantile = qchisq(Named("p") = 1.0 - var_prob, Named("df") = nu);
   chisq_quantile = tmp_quantile[0];
-  for(int k = 0; k < q; k++){
-    pi.sigma_hat[k] = stddev(Y.col(k));
-    pi.lambda[k] = (pi.sigma_hat[k] * pi.sigma_hat[k] * chisq_quantile)/nu;
-    pi.sigma_mu[k] = ( (Y.col(k).max() - Y.col(k).min())/(2.0 * kappa * sqrt( (double) m))); // This is the default in wbart
-  }
   
+  for(size_t k = 0; k < q; k++){
+    pi.sigma_hat[k] = 1.0; // all columns have variance 1
+    pi.lambda[k] = (pi.sigma_hat[k] * pi.sigma_hat[k] * chisq_quantile)/nu;
+  }
+  for(size_t d = 0; d < D; d++) pi.sigma_mu[d] = (y_col_max.max() - y_col_min.min())/(2.0 * kappa * sqrt( (double) m));
   
   if(verbose == true) Rcpp::Rcout << "Finished setting pi" << endl;
   // Set up trees, data, and residuals

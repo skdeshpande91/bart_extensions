@@ -8,10 +8,9 @@ sourceCpp("src/slfm_bart.cpp")
 
 load("data/forex.RData")
 m_list <- c(1, 5, 10, 25, 50, 100, 200)
-#D_list <- c(5, 10, 25, 50, 100)
-D_list <- c(5,10)
+D_list <- c(5, 10, 25, 50, 100)
 
-args <- commandArgs(TRUE_)
+args <- commandArgs(TRUE)
 m <- m_list[as.numeric(args[1])]
 
 
@@ -32,11 +31,12 @@ for(D_ix in 1:length(D_list)){
   dimnames(fit$f_test_samples) <- list(c(), colnames(Y_train), c())
   dimnames(fit$sigma_samples) <- list(colnames(Y_train),c())
   method <- method_list[D_ix]
+  time[method] <- fit$time
   for(x in colnames(Y_train)){
     train_index <- which(!is.na(Y_train[,x]))
     train_smse[method, x] <- mean( (forex_raw[train_index,x] - rowMeans(fit$f_test_samples[train_index,x,]))^2)/var(Y_train[,x], na.rm = TRUE)
     sigma[method,x] <- mean(fit$sigma_samples[x,])
-    time[x] <- fit$time
+    #time[x] <- fit$time
   }
   for(x in colnames(test_smse)){
     test_index <- which(is.na(Y_train[,x]))

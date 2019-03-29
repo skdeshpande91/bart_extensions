@@ -694,6 +694,7 @@ void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arm
           // note that af currently contains the fit of every tree but tree t in basis function d
           r = di.y[k + si.I[i]*di.q] - di.af[k + si.I[i]*di.q]; // partial residual
           //Rcpp::Rcout << " r = " << r << endl;
+          //if(r != r) Rcpp::Rcout << "[mu_posterior_slfm]: nan in r. i = " << i << " k = " << k << endl;
           mu_bar += Phi(k, di.d) * r/(sigma(k) * sigma(k));
         } else{
           //Rcpp::Rcout << " observation missing. skipping this!" << endl;
@@ -702,6 +703,7 @@ void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arm
     } // closes loop over observations
   } // closes if checking that there are observation in terminal node
   V = 1.0/V_inv;
+  //if(V != V) Rcpp::Rcout << "[mu_posterior_slfm]: nan in V. V_inv = " << V_inv << endl;
   mu_bar *= V;
 }
 
@@ -805,10 +807,11 @@ void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, d
     mu_bar = 0.0;
     V = 0.0;
     mu_posterior_slfm(mu_bar, V, Phi, sigma, sv[i], di, pi.sigma_mu[di.d]);
+    //Rcpp::Rcout << "[drmu_slfm]: mu_bar = " << mu_bar << " V = " << V << endl;
     bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
     if(bnv[i]->getm() != bnv[i]->getm()){
-      for(size_t ii = 0; ii < sv[i].I.size(); ii++) Rcpp::Rcout << " " << i ;
-      Rcpp::Rcout << endl;
+      //for(size_t ii = 0; ii < sv[i].I.size(); ii++) Rcpp::Rcout << " " << ii ;
+      //Rcpp::Rcout << endl;
       Rcpp::Rcout << "mu_bar = " << mu_bar << " V = " << V << endl;
       Rcpp::stop("drmu failed: nan in terminal node");
     }

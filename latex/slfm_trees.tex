@@ -95,7 +95,7 @@ The main goal is to impute the value of each time series, to forecast each serie
 
 Formally, suppose we observe triplets of data $(\bx_{1}, \by_{1}, \delta_{1}), \ldots, (\bx_{n}, \by_{n}, \delta_{n})$ where $\bx_{i} \in \R^{p}$ are covariates (possibly time-dependent), $\by_{i} \in \R^{q}$ are the noisy observations from each series, and $\delta_{i} \in \left\{0,1\right\}^{q}$ is a vector of indicators with $\delta_{i,k} = 1$ if and only if $y_{i,k}$ is observed.
 For now, we assume that $\delta$ is deterministic.
-\textcolor{blue}{[skd]: in the context of medical time series, this assumption is not particularly realistic. To wit, one series may track the results of a particular diagnostic test that is run only if other vital signs are in some critical region. That is, it's not unrealistic to believe that we observe one series based on the values of previous series. We'll return to this issue later}
+%\textcolor{blue}{[skd]: in the context of medical time series, this assumption is not particularly realistic. To wit, one series may track the results of a particular diagnostic test that is run only if other vital signs are in some critical region. That is, it's not unrealistic to believe that we observe one series based on the values of previous series. We'll return to this issue later}
 
 Independent of $\delta_{i}$, we model for each $i = 1, \ldots, n$ and $k = 1, \ldots, q$ 
 $$
@@ -104,15 +104,16 @@ $$
 where $\bf = (f_{1}, \ldots, f_{q})$ and $\bsigma = (\sigma_{1}, \ldots, \sigma_{k})$ are unknown vector valued functions of $\bx$ and the $\varepsilon_{i,k}$'s are independent standard normals.
 For now, we focus on the homoskedastic case where the residual variances are constant and do not depend on inputs $\bx_{i}$; we will return to the heteroskedastic case later.
 
-We take a Bayesian approach, which amounts to specifying a prior over the functions $\bf$ and $\bsigma$ and updating them with Bayes' theorem to get posterior distributions that reflect our uncertainty about them in light of the data.
+We take a Bayesian approach, which involves specifying priors over the functions $\bf$ and $\bsigma$ and updating them with Bayes' theorem to obtain a posterior distribution that reflect our uncertainty about $\bf$ and $\bsigma$ in light of the data.
 In principle, we can attempt to learn each $f_{k}$ independently of one another in an embarrassingly parallel manner.
 This, of course, precludes ``sharing of statistical strength'' and we can quite reasonably expect better predictive performance if we take advantage of the potential correlations between the outcomes \citep[see, e.g.,][]{Breiman1997}. 
 Improving prediction of one outcome dimension using information from some or all of the other outcome dimensions has been well-studied in machine learning community, under the name of ``transfer learning'' or ``multi-task learning.''
 We borrow from this literature, and refer to each outcome dimensions as a task below.
 
-This is a growing literature that use multi-task GPs regression to model multiple physiological time series (see, e,g., \citet{Clifton2012}, \citet{Ghassemi2015}, \citet{Durichen2015}, \citet{Futoma2017}, \citet{Colopy2018}, and \citet{Cheng2018}). 
-Essentially, all of these papers represent each underlying $f_{k}$ as a linear combination of a latent set of independent univariate basis functions, which are assigned GP priors.
-In this note, we revisit the semi-parametric latent factor model (SLFM) of \citet{Teh2005} but construct our latent basis using additive regression trees in the style of \citet{Chipman2010} instead of realizations of GPs. 
+
+Gaussian processes (GPs) are a major workhorse for Bayesian non-parametric regression in the machine learning literature.
+A particularly popular approach to multi-output regression in this community is to represent each task $f_{k}$ as a linear combination of a latent set of independent realizations from GP priors and much of the recent literature on modeling multiple physiological time series uses such models (see, e,g., \citet{Clifton2012}, \citet{Ghassemi2015}, \citet{Durichen2015}, \citet{Futoma2017}, \citet{Colopy2018}, and \citet{Cheng2018}).
+In this note, we consider an alternative, in which we represent the basis functions are regression trees in the style of \citet{Chipman2010}.
 
 
 
@@ -126,7 +127,7 @@ In this note, we revisit the semi-parametric latent factor model (SLFM) of \cite
 To set our notation, let $T$ denote a binary decision tree partitioning $\R^{p}$ that consists of a collection of interior nodes and $L(T)$ terminal or \textit{leaf} nodes. 
 We associate an axis-aligned decision rule of the form $\left\{x_{j} < c \right\}$ or $\left\{x_{j} \geq c \right\}$ to each internal (i.e. non-leaf) node of $T.$
 $T$ defines a partition of $\R^{p}$ into $L(T)$ rectangular cells and we let $\ell(\bx,T)$ be the function that returns the index of the cell containing the point $\bx.$
-A \textit{regression} tree is a pair $(T,M)$ consisting of a decision tree $T$ and collection $M = \left\{\mu_{1}, \ldots, \mu_{L(T)}\right\}$ of parameters corresponding to each leaf of $T.$
+A \textit{regression tree} is a pair $(T,M)$ consisting of a decision tree $T$ and collection $M = \left\{\mu_{1}, \ldots, \mu_{L(T)}\right\}$ of parameters corresponding to each leaf of $T.$
 We define the evaluation function $g(\bx; T,M) = \mu_{\ell(\bx,T)}$ which takes as input a point $\bx \in \R^{d}$ and returns the leaf parameters corresponding to the partition cell containing $\bx.$
 %An illustration in two-dimensions is shown in Figure~\ref{fig:regression_tree}
 
@@ -170,100 +171,52 @@ With these default choices in mind, abusing our notation slightly, we will take 
 \subsection{Proposed Model}
 
 Throughout, we will assume that the observed data from each task has been centered and scaled to have standard deviation one.
-In order to perform this scaling, we will require that we observe at least 2 realizations from each task \textcolor{blue}{[skd]: This is one disadvantage vis-a-vis using GPs}.
+In order to perform this scaling, we will require that for each $i, \sum_{k}{\delta_{i,k}} \geq 1$ (i.e. at least one observed outcome per observation) and for each $k, \sum_{i}{\delta_{i,k}} \geq 2$ (i.e. at least two observations of each task).
 
-In order to induce dependence between the $f_{k}$'s, we follow the basic idea of \citet{Teh2005} and introduce independent latent basis functions $u_{1}, \ldots, u_{D}$ and express each $f_{k}$ as a linear combination of these basis elements:
+In order to induce dependence between the $f_{k}$'s, we follow the basic idea of \citet{Teh2005} and express each $f_{k}$ as a linear combination of basis functions $u_{1}, \ldots, u_{D}$:
 $$
 f_{k}(\bx) = \sum_{d = 1}^{D}{\phi_{k,d}u_{d}(\bx)}.
 $$
 More compactly, we will write $\bf(\bx) = \Phi\bu(\bx)$ where $\bf(\bx) = (f_{1}(\bx), \ldots, f_{q}(\bx))$ and $\bu(\bx) = (u_{1}(\bx), \ldots, u_{D}(\bx))$ and $\Phi = (\phi_{k,d}) \in \R^{q \times D}$ records how much each task $f_{k}$ depends on the basis element $u_{d}.$
 We place independent $\text{BART}(m, \sigma^{2}_{\mu})$ priors on each of the basis elements $u_{1}, \ldots, u_{D}$ so that each task $f_{k}$ is now approximated by a weighted sum of regression trees, which are shared across tasks.
-This sharing of regression trees induces \textit{a priori} correlation between the tasks.
-To see this, first note that conditional on $\Phi,$
+We complete our prior construction by taking $\phi_{k,d} \sim N(0,\sigma^{2}_{\phi,k})$ for each $k$ and $\sigma^{2}_{k} \sim \text{Inv. Gamma}\left(\frac{\nu}{2}, \frac{\nu\lambda_{k}}{2}\right),$ where the $\sigma_{\phi,k}$'s and $\lambda_{k}$'s are to be specified. 
+
+Observe that conditional on $\Phi,$ 
 \begin{align*}
 \text{Cov}(f_{k}(\bx), f_{k'}(\bx) | \Phi) &= \sum_{d = 1}^{D}{\phi_{k,d}\phi_{k',d}\text{Var}(u_{d}(\bx))} \\
 &= m\sigma^{2}_{\mu}\Phi_{k,\cdot}\Phi_{k',\cdot}^{\top}
 \end{align*}
 where $\Phi_{k,\cdot}$ is the $1 \times D$ $\text{k}^{\text{th}}$ row vector of $\Phi.$
+Further, since $\Phi_{k,\cdot}^{\top}\Phi_{k',\cdot} \neq 0$ almost surely, $f_{k}(\bx)$ and $f_{k'}(\bx)$ will be marginally correlated \textit{a priori}.
+It is worth noting that the first line above holds regardless of the prior placed on the basis elements $u_{d},$ while the second following directly from the fact that the $u_{d}$ are iid $\text{BART}(m,\sigma^{2}_{\mu}).$
 
-It is worth noting that the first line above holds regardless of the prior placed on the basis elements $u_{1}, \ldots, u_{D},$ while the second line follows directly from the fact that the $u_{d}$'s are iid $\text{BART}(m,\sigma^{2}_{\mu}).$
-Now so long as the prior on $\Phi$ assigns positive probability to the event $\Phi_{k,\cdot}^{\top}\Phi_{k',\cdot} \neq 0,$ $f_{k}(\bx)$ and $f_{k'}(\bx)$ will be marginally correlated as well. 
+It remains to specify the hyper-parameters $\sigma_{\mu}, \sigma_{\phi,k}$ and $\lambda_{k}.$
+Recall that our aim is to provide useful \textit{default} values so that our proposed method may be applied to a wide variety of problems.
+To this end, we start with $\sigma_{\mu} = \frac{Y_{\max} - Y_{\min}}{2\kappa \sqrt{mD}}$ where $\kappa$ is to be specified, where $Y_{\max}$ and $Y_{\min}$ are the maximum and minimum standardized observations across all tasks.
+We use \citet{Chipman2010}'s default choice of $\nu = 3$ and select  $\lambda_{k}$ so that \textit{a prior} $\P(\sigma_{k} < \hat{\sigma}_{k}) = 0.9,$ where $\hat{\sigma}_{k}$ is an initial over-estimate of the residual standard deviation for task $k.$
+It is straightforward to compute $\lambda_{k} = \nu^{-1}q_{\nu}(0.1)\hat{\sigma}_{k}^{2},$ where $q_{\nu}(0.1)$ is the $10\%$ quantile of the $\chi^{2}_{\nu}$ distribution.
+As we standardize our data to have variance 1, we will always take $\hat{\sigma}_{k} = 1$ so that with the choice $\nu = 3,$ we have $\lambda_{k} \approx 0.195.$
 
-Just like with univariate BART, we aim to set useful default hyperparameter specifications.
-To this end, we start with $\sigma_{\mu} = \frac{Y_{\max} - Y_{\min}}{2\kappa \sqrt{mD}}$ where $\kappa$ is to be specified, where $Y_{\max}$ and $Y_{\min}$ are the maximum and minimum standardized observations across all observations.
-
-We place independent scaled inverse-$\chi^{2}$ priors on the residual variances $\sigma^{2}_{1}, \ldots, \sigma^{2}_{q}$, with $\sigma^{2}_{k} \sim \text{Inv. Gamma}\left(\frac{\nu}{2}, \frac{\nu\lambda_{k}}{2}\right).$
-We use \citet{Chipman2010}'s default choice of $\nu = 3$ and pick $\lambda_{k}$ so that \textit{a priori} $\P(\sigma_{k} < \hat{\sigma_{k}}) = 0.9$ where $\hat{\sigma}_{k}$ is an initial over-estimate of the residual standard deviation for task $k.$
-That is, we take $\lambda_{k} = \nu^{-1}q_{\nu,0.1}\hat{\sigma}^{2}$ where $q_{\nu,0.1}$ is the 10\% quantile of the $\chi^{2}_{\nu}$ distribution.
-For $\nu = 3$ and $\hat{\sigma}_{k} = 1$, which is a reasonable over-estimate of the residual variance once we standardize all responses, we have $\lambda_{k} \approx 0.195.$
-
-
-It remains to specify the prior on $\Phi$ and to set the number of basis elements $D$ and the number of trees within each basis element $m.$
-Recall that one of the key feature of univariate BART is the fact that the marginal prior on $f(\bx)$ gave substantially probability to the range of the observed responses.
-While this type of calibration does sacrifice Bayesian coherence, it does ensure that the prior on $f$ is not grossly in conflict with the data.
-To achieve a similar calibration, notice that conditional on $\Phi$, 
+Now, conditional on $\Phi,$ we have 
 $$
-\bf(\bx) | \Phi \sim N_{q}(0_{q}, m\sigma^{2}_{\mu}\Phi\Phi^{\top}).
+f_{k}(\bx) \sim N_{q}(0, m\sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}).
 $$
-
-One way to ensure that the marginal prior on $f_{k}$ covers the range of observed realizations of the $\text{k}^{\text{th}}$ task is to require 
+Further, this conditional prior covers the range $[Y_{k,\min}, Y_{k,\max}]$ with at least $2\kappa$ standard deviations whenever
 $$
-\sqrt{m}\sigma_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2} \ll Y_{k,\max} - Y_{k,\min}
+\lVert \Phi_{k,\cdot} \rVert_{2} \leq \sqrt{D} \times \frac{Y_{k,\max} - Y_{k,\min}}{Y_{\max} - Y_{\min}}.
 $$
-with high prior probability.
-Recalling our choice of $\sigma_{\mu} = \frac{Y_{\max} - Y_{\min}}{2\kappa \sqrt{mD}}$, we can achieve this desideratum if 
-\begin{equation}
-\label{eq:phi_desideratum}
-\lVert \Phi_{k,\cdot} \rVert_{2} \leq \sqrt{D} \times \frac{Y_{k,\max} - Y_{k,\min}}{Y_{\max} - Y_{\min}},
-\end{equation}
-with high prior probability.
-
-
-As a starting point, consider the relatively simply prior $\phi_{k,d} \sim N(0, \sigma^{2}_{\phi,k}).$
-With this choice, we note that $\lVert \Phi_{k,\cdot} \rVert_{2}^{2} \sim \sigma^{2}_{\phi,k}\chi^{2}_{D},$ so one way to achieve~\eqref{eq:phi_desideratum} \textit{marginally} for each $k = 1, \ldots, q$ is to set
+Following \citet{Chipman2010} we will take $\kappa = 2.$
+One way to ensure that the \textit{marginal} prior of $f_{k}(\bx)$ assigns substantial prior probability to the range of the observed data is to ensure that the above inequality holds with high prior probability.
+Since $\phi_{k,d} \sim N(0,\sigma^{2}_{\phi,k}),$ we know $\lVert \Phi_{k,\cdot}\rVert_{2}^{2} \sim \sigma^{2}_{\phi,k}\chi^{2}_{D},$ and we set
 $$
-\sigma_{\phi,k} = \left(\frac{D}{q_{D,0.9}}\right)^{1/2} \times \frac{Y_{k,\max} - Y_{k,\,min}}{Y_{\max} - Y_{\min}}
-$$
-where $q_{D,0.9}$ is the 90\% quantile of a $\chi^{2}_{D}$ distribution.
-Note that we can easily use a different quantile.
-
-A slightly stronger requirement may be to satisfy~\eqref{eq:phi_desideratum} simultaneously for each task, which motivates taking
-$$
-\sigma_{\phi,k} = \left(\frac{D}{q_{D,0.9^{1/q}}}\right)^{1/2}\times \frac{Y_{k,\max} - Y_{k,\min}}{Y_{\max} - Y_{\min}}.
+\sigma_{\phi,k} = \sqrt{\frac{D}{q_{D}(0.9)}} \times \frac{Y_{k,\max} - Y_{k,\min}}{Y_{\max} - Y_{\min}}.
 $$
 
-It is worth pointing out that as $D \rightarrow \infty,$ the ratio $\frac{D}{q_{D,\tilde{\alpha}}} \leftrightarrow 1$ for any $\tilde{\alpha} > 0.5$
-We note that larger choices of $\sigma^{2}_{\phi,k}$ induce \textit{less} regularization on the fit of $f_{k}$ since it disperses more marginal probability mass of $f_{k}$ outside the interval $[Y_{k,\min}, Y_{k,\max}].$
-
-%Note that under this simple prior specification, each task $f_{k}$ depends on every basis function $u_{d},$ and therefore each of the tasks are \textit{a priori} correlated.
-%In some situations, this may be overly restrictive or unrealistic. 
-%A more flexible option that can adapt to the situation that some of the tasks are uncorrelated is to use a sparsity inducing prior on the elements of $\Phi.$
-%\textcolor{blue}{[skd]: Another motivation: the cross-covariances depend on a matrix of rank $\min\left\{D,q\right\}$. We could want adaptivity}
-
-In a certain sense, our goal is to find a $D$-dimensional representation of the $q$-dimensional tasks.
-Up to this point, we have described only fixing $D$ to some, possibly larger value.
-Another goal may be to learn a lower dimensional representation of the $q$ tasks.
-To achieve this, consider the following spike-and-slab prior:
-\begin{align*}
-\phi_{k,d} | \gamma_{k,d} &\sim \gamma_{k,d}N(0,\sigma^{2}_{\phi,k}) + (1 - \gamma_{k,d})\delta_{0} \\
-%\gamma_{k,1}, \ldots, \gamma_{k,d} | \theta_{k} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{k}) \hspace{0.1in} \text{for $k = 1, \ldots, q$}\\
-\gamma_{1,d}, \ldots, \gamma_{q,d} | \theta_{d} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{d}) \hspace{0.1in} \text{for $d = 1, \ldots, D$} \\
-\theta_{1}, \ldots, \theta_{D} &\sim \text{Beta}(a,b)
-\end{align*}
-
-
-Conditional on $\Phi_{k,\cdot}$, we still have that $f_{k}(\bx) | \Phi_{k,\cdot} \sim N(0, \sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}).$
-However, the random variable $\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ is now a scaled $\chi^{2}$-random variable with a \textit{random} number of degrees of freedom.
-In light of this, if we took $\sigma_{\phi}$ as before, the value of $\sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ will tend to be much smaller, resulting in much more aggressive shrinkage of $f_{k}$ to $\overline{Y}_{k}.$
-Instead, we can set
+Note that \textit{a priori}, the marginals of $\bf(\bx)$ are independent.
+To ensure that all marginals cover the corresponding range of the observed data simultaneously with high prior probability, we can choose
 $$
-\sigma_{\phi,k} = \left(\frac{D}{q_{aD/(a+b),0.9}}\right)^{1/2} \times \frac{Y_{k,\max} - Y_{k,\,min}}{Y_{\max} - Y_{\min}}.
+\sigma_{\phi,k} = \sqrt{\frac{D}{q_{D}(0.9^{1/q})}} \times \frac{Y_{k,\max} - Y_{k,\min}}{Y_{\max} - Y_{\min}}
 $$
-
-%To set an appropriate value of $\sigma^{2}_{\phi,k},$ we note that $\sigma^{-2}_{\phi,k}\lVert \Phi_{k,\cdot} \rVert_{2}^{2}$ is now a $\chi^{2}$ random variable with a \textit{random} number of degrees of freedom equal to the number of non-zero $\phi_{k,d}.$
-%\textcolor{blue}{[skd]: I'm still thinking about the details but I'm pretty sure the number of non-zero entries concentrates around it's mean and we can probably do something with that.}
-
-
 \subsection{Connection to Existing Work}
 \label{sec:related_work}
 
@@ -287,15 +240,13 @@ where we write $\bx \sim \bx'$ iff $\bx$ and $\bx'$ are assigned to the same par
 This connection between BART and kernel methods was first made in \citet{Linero2017}, who further stated a heuristic theorem that so long as $m\sigma^{2}_{\mu} \rightarrow \tilde{\sigma}^{2}_{\mu}$ when $m \rightarrow \infty,$ a realization from a $\text{BART}(m,\sigma^{2}_{\mu})$ prior converge weakly to a realization from a $\text{GP}(\tilde{\sigma}^{2}_{\mu}k_{\text{BART}})$ prior.
 So in a certain sense, we may view posterior inference with BART as approximating posterior inference with a $\text{GP}(\tilde{\sigma}^{2}_{\mu}k_{\text{BART}})$ prior.
 
-
-
-\citet{Linero2018} is closest in spirit to our model.
+\citet{Linero2018} is very close in spirit to our model.
 In that work, they model multiple tasks using a common set of regression trees but introduce a different set of leaf parameters for each task.
 For a given leaf, the $q$ associated parameters are drawn from a multivariate prior, thereby inducing dependence between the modeled tasks.
 \textcolor{blue}{[skd]: I haven't thought about this too much yet but this model might be a really special case of the one we've described above. In any case, I think the correlation between tasks is fixed throughout and is not learned as it is in our proposal.}
 
-\section{A Gibbs sampler}
 
+\subsection{Posterior Inference}
 Given the data $\by$ and our prior specification, we have a posterior 
 $$
 \Pi( (T_{1}^{(1)}, M_{1}^{(1)}), \ldots, (T^{(d)}_{m}, M^{(d)}_{m}), \Phi, \bsigma | \by)
@@ -303,6 +254,151 @@ $$
 on all of the unknown parameters in our semi-parametric latent factor model. 
 We sample from this posterior using a slight elaboration on the backfitting procedure of \citet{Chipman2010}.
 Like their procedure, our's is, at a high level, a Gibbs sampler, that iterates between sequentially updating the basis functions $u_{1}, \ldots, u_{D},$ the loading matrix $\Phi,$ and the residual variances $\bsigma^{2},$ while keeping the other parameters fixed.
+We describe the Gibbs sampler in detail in Appendix~\ref{app:gibbs_sampler}.
+
+
+\section{Illustration}
+\label{sec:illustration}
+
+We now illustrate the proposed procedure, which we for now call SLFM-BART, using two benchmark datasets from the multi-output GP literature.
+These datasets were considered in \citet{Nguyen2014} and \citet{Requeima2019}.
+We compare the performance of SLFM-BART to fitting independent BART models.
+
+\subsection{Foreign Exchange Rate}
+
+In our first experiment, model the exchange rates between USD and three precious metals (gold, silver, and platinum) and the top 10 international currencies (CAD, EUR, JPY, GBP, CHF, AUD, HKD, NZD, KRW, and MXN).
+We follow the experimental setup of \citet{Alvarez2010} and use data from the 251 working days of the year 2007\footnote{The data is available from \url{http://fx.sauder.ubc.ca}}. 
+We remove data from the exchange rates of CAD for days 50-100, JPY for days 100-150, and AUD for days 150-200.
+Our goal is to recover these long contiguous realizations from the three tasks and we measure performance using standardized MSE.
+We fit SLFM-BART using a range of values of $m$ and $D$ and the suggested hyper-parameter settings above.
+For each combination of $m$ and $D$ we generated 1500 MCMC samples, discarding the first 500 as burn-in.
+Figure~\ref{fig:forex_slfm_smse} shows the SMSE on each task and the overall average SMSE for each combination considered.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width = 0.8\textwidth]{../images/forex_slfm_smse.png}
+\caption{Standardized mean square error for SLFM-BART for several combinations of $m$ and $D.$}
+\label{fig:forex_slfm_smse}
+\end{figure}
+
+On this dataset, we achieved the best overall average SMSE of 0.0526 using $D = 50$ basis functions consisting of $m = 25$ trees each. 
+There does not seem to be a discernible pattern in the relationship between SMSE and $D$ or $m.$
+Figure~\ref{fig:forex_intervals} shows the posterior predictive means and 95\% prediction intervals for SLFM-BART with $(m,D) = (25,50).$
+We see immediately that both independent BART and SLFM-BART essentially interpolate the training data (gray points). 
+Further, in general, the prediction intervals for independent BART are wider than for SLFM-BART, especially on the green testing points.
+Interestingly, we see that SLFM-BART and independent BART overestimate the held-out CAD data and that in fact, independent BART is less biased.
+\begin{figure}[H]
+\centering
+\includegraphics[width = \textwidth]{../images/forex_intervals.png}
+\caption{Posterior predictive mean and 95\% intervals for CAD, JPY, and AUD for SLFM-BART with $(m,D) = (25, 50)$ (blue) and independent BART (red). Green points were held out for testing purposes.}
+\label{fig:forex_intervals}
+\end{figure}
+
+
+\begin{comment}
+Table~\ref{tab:forex_smse} reports the overall average SMSE for several of these combinations along with the following competitors based on GPs.
+\end{comment}
+
+
+\subsection{Air Temperature}
+
+Our next experiment uses air temperature data recorded between 10 and 15 July 2013 from 4 different networks of weather sensors (named Bramblemet, Sotonment, Cambermet, and Chimet) on the south coast of England\footnote{Data for Bramblemet and links for the other networks available \url{www.bramblemet.co.uk} and links therein}.
+Measurements were taken every 5 minutes.
+Following \citet{Nguyen2014}, we held out contiguous observations from the Cambermet and Chimet data to serve as training.
+Figure~\ref{fig:airtemp_slfm_smse} is the analog of Figure~\ref{fig:forex_slfm_smse} and shows the SMSE for SLFM-BART with various combinations of $m$ and $D.$
+
+\begin{figure}[H]
+\centering
+\includegraphics[width = 0.8\textwidth]{../images/airtemp_slfm_smse.png}
+\caption{Standardized mean square error for SLFM-BART for several combinations of $m$ and $D.$}
+\label{fig:airtemp_slfm_smse}
+\end{figure}
+
+For this dataset, we achieves the best overall SMSE of 0.0192 using $m = 50$ and $D = 5.$
+Figure~\ref{fig:airtemp_intervals} shows the predictive means and 95\% intervals for the Chimet and Cambermet data.
+We saw that SLFM-BART overestimates the held-out data while independent BART underestimates the held-out data.
+It is quite concerning to see that the 95\% intervals from SLFM-BART completely miss the heldout data. 
+
+\begin{figure}[H]
+\center
+\includegraphics[width = \textwidth]{../images/airtemp_intervals.png}
+\caption{Posterior predictive mean and 95\% intervals for Cambermet and Chimet for SLFM-BART with $(m,D) = (50, 5)$ (blue) and independent BART (red). Green points were held out for testing purposes.}
+\label{fig:airtemp_intervals}
+\end{figure}
+
+Table~\ref{tab:forex_airtemp_smse} compares the overall SMSE of SLFM-BART for several combinations of $m$ and $D$ along with the following competitors based on GPs.
+\begin{itemize}
+\item{IGP: Fit independent GP with squared exponential kernels, as reported by \citet{Nguyen2014}}
+\item{CGP: convolved GP model, as reported by \citet{Nguyen2014}}
+\item{COGP: collaborative multi-output GP, as reported by \citet{Nguyen2014}. This model is closest in spirit to ours as it is also expresses each task as a linear combination of basis functions}
+\item{GPAR: Autoregressive Gaussian processes \citep{Requeima2019}. This is a compositional model as it expresses each $y_{k} = f_{k}(\bx, y_{1}, \ldots, y_{k-1})$ with GP prior placed on each $f_{k}$}
+\end{itemize} 
+It is interesting to note that for most combinations of $D$ and $m$, SLFM-BART outperforms COGP and CGP.
+
+\begin{table}[H]
+\centering
+\caption{Standardized mean square error for predicting the held out continuous segments for CAD, JPY, and AUD. The notation $\text{SLFM}(m,D)$ indicates that the $D$ basis functions were comprised of $m$ trees each.}
+\label{tab:forex_smse}
+\small
+\begin{tabular}{lrr} \hline
+Method & FOREX & AIRTEMP\\ \hline
+(5, 1) & 0.2505 & 0.0332 \\
+(5, 25) & 0.2705 & 0.0564 \\
+(5, 50) & 0.2744 & \textbf{0.0192} \\
+(25, 1) & 0.1248 & 0.0247 \\
+(25, 25) & 0.0813 & 0.1080 \\
+(25, 50) & 0.0599 & 0.0616 \\
+(50, 1) & 0.1890 & 0.0303 \\
+(50, 25) & \textbf{0.0526} & 0.0278 \\
+(50, 50) & 0.0759 & 0.0202 \\ \hline
+Ind. BARTs & 0.4379 & 0.3055 \\
+Ind. GPs & 0.5996 & 0.8944 \\
+COGP & 0.2125 & 0.1077 \\
+CGP & 0.2427 & 0.1125 \\
+GPAR & 0.0302 & -- \\ \hline
+\end{tabular}
+\end{table}
+
+
+\section{Next Steps}
+
+There are several potential directions, which we briefly outline now.
+
+We have so far only considered the homoskedastic setting where the residual variance for each task was constant.
+It is straightforward to consider the heteroskedastic case using \citet{Pratola2016}'s ``product-of-trees'' formulation.
+More substantively, recall that our choice of $\phi_{k,d} \sim N(0,\sigma^{2}_{\phi,k})$ ensures that $\Phi$ is dense almost surely.
+This in turn implies that every task depends on every basis function, which may be an overly restrictive imposition.
+Indeed, in the FOREX example, while our SLFM-BART fit the JPY and AUD data better than individual BART regressions, it did substantially worse on the CAD data.
+This would suggest that the CAD exchange rate is somewhat less dependent on the other series.
+
+A more flexible model would introduce sparsity to $\Phi,$ enabling us to adapt to situations where some tasks are independent of certain basis functions and of other tasks.
+One approach would be to use a spike-and-slab prior: 
+\begin{align*}
+\phi_{k,d} | \gamma_{k,d} &\sim \gamma_{k,d}N(0,\sigma^{2}_{\phi,k}) + (1 - \gamma_{k,d})\delta_{0} \\
+%\gamma_{k,1}, \ldots, \gamma_{k,d} | \theta_{k} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{k}) \hspace{0.1in} \text{for $k = 1, \ldots, q$}\\
+\gamma_{1,d}, \ldots, \gamma_{q,d} | \theta_{d} &\stackrel{\text{i.i.d}}{\sim} \text{Bernoulli}(\theta_{d}) \hspace{0.1in} \text{for $d = 1, \ldots, D$} %\\
+%\theta_{1}, \ldots, \theta_{D} &\sim \text{Beta}(a,b)
+\end{align*}
+We may place independent $\text{Beta}(a,b)$ priors on the $\theta_{d}$'s or we may enforce an ordering $\theta_{1} > \cdot \theta_{D}$ using the stick-breaking construction of the Indian Buffet Process.
+
+In the AIRTEMP example, we saw that both SLFM-BART and independent BART were able to detect the daily rise and fall of temperature without pre-specifying any periodicity.
+In the context of time series data it may be worthwhile to consider adding shape constraints to the general BART framework.
+Currently, to split at a given node we draw a covariate index $v$ and cut-point $c$ and split observations according to $x_{v} \leq c$ or $x_{v} > c.$
+To allow for periodicity, we may similarly select $v$ but before choosing a cut-point, we can draw a period $P_{v}$ and split observations according to $x_{v} - P_{v}\times \lfloor x_{v}/P_{v} \rfloor \leq c_{P}$ or not, where $c_{P}$ is a cutpoint drawn from the interval $[0,P_{v}].$ 
+
+
+Finally, we have assumed throughout that each task was continuous.
+A fruitful direction to pursue would be the joint modeling of mixed-type data, in which some of the tasks were categorical or count data.
+The approach of \citet{Pourmohamad2016} may be useful.
+
+
+\newpage
+\bibliography{bart.bib}
+
+\newpage
+\section{A Gibbs sampler}
+\label{app:gibbs_sampler}
+
 We describe each of these conditional updates in the next three subsections.
 
 \subsection{Updating the basis functions}
@@ -498,88 +594,41 @@ $$
 \sigma^{2}_{k} | \by, \bu, \Phi \sim \text{Inv. Gamma}\left(\frac{\nu + \sum{\delta_{i,k}}}{2}, \frac{\nu\lambda_{k} + \sum{\delta_{i,k}(y_{i,k} - \Phi\bu(\bx_{i}))^{2}}}{2}\right)
 $$
 
-\section{Illustrations}
 
-To illustrate the proposed procedure, consider a toy dataset with $n = 1000, p = 2$ and $q = 10.$
-% Describe the dataset Toy 2
-
-% Consider also running GPAR with this data to see how that does.
-% In a sense, this is not a fair comparison because GPAR has no real way of detecting the dependence of X_2...
+%We finally note that large choices of $\sigma^{2}_{\phi,k}$ induce \textit{less regularization} of the fit of $f_{k}$ since it disperse more marginal probability mass outside the interval $[Y_{k,\min}, Y_{k,\max}].$
 
 
-\subsection{Cars Dataset}
-% Use the UCI automobile dataset
-Here we predict city miles per gallon, highway mpg, and price using the remaining features.
-Note that most of these features are categorical and have been re-coded to 0/1 dummy variables.
 
 
-Again, we see the advantage of a multivariate approach.
+%It is worth pointing out that as $D \rightarrow \infty,$ the ratio $\frac{D}{q_{D,\tilde{\alpha}}} \leftrightarrow 1$ for any $\tilde{\alpha} > 0.5$
+%We note that larger choices of $\sigma^{2}_{\phi,k}$ induce \textit{less} regularization on the fit of $f_{k}$ since it disperses more marginal probability mass of $f_{k}$ outside the interval $[Y_{k,\min}, Y_{k,\max}].$
+
+%Note that under this simple prior specification, each task $f_{k}$ depends on every basis function $u_{d},$ and therefore each of the tasks are \textit{a priori} correlated.
+%In some situations, this may be overly restrictive or unrealistic. 
+%A more flexible option that can adapt to the situation that some of the tasks are uncorrelated is to use a sparsity inducing prior on the elements of $\Phi.$
+%\textcolor{blue}{[skd]: Another motivation: the cross-covariances depend on a matrix of rank $\min\left\{D,q\right\}$. We could want adaptivity}
+
+%In a certain sense, our goal is to find a $D$-dimensional representation of the $q$-dimensional tasks.
+%Up to this point, we have described only fixing $D$ to some, possibly larger value.
+%Another goal may be to learn a lower dimensional representation of the $q$ tasks.
+%To achieve this, consider the following spike-and-slab prior:
 
 
-\subsection{Foreign Exchange Data}
+%Conditional on $\Phi_{k,\cdot}$, we still have that $f_{k}(\bx) | \Phi_{k,\cdot} \sim N(0, \sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}).$
+%However, the random variable $\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ is now a scaled $\chi^{2}$-random variable with a \textit{random} number of degrees of freedom.
+%In light of this, if we took $\sigma_{\phi}$ as before, the value of $\sigma^{2}_{\mu}\lVert \Phi_{k,\cdot}\rVert_{2}^{2}$ will tend to be much smaller, resulting in much more aggressive shrinkage of $f_{k}$ to $\overline{Y}_{k}.$
+%Instead, we can set
+%$$
+%\sigma_{\phi,k} = \left(\frac{D}{q_{aD/(a+b),0.9}}\right)^{1/2} \times \frac{Y_{k,\max} - Y_{k,\,min}}{Y_{\max} - Y_{\min}}.
+%$$
+
+%To set an appropriate value of $\sigma^{2}_{\phi,k},$ we note that $\sigma^{-2}_{\phi,k}\lVert \Phi_{k,\cdot} \rVert_{2}^{2}$ is now a $\chi^{2}$ random variable with a \textit{random} number of degrees of freedom equal to the number of non-zero $\phi_{k,d}.$
+%\textcolor{blue}{[skd]: I'm still thinking about the details but I'm pretty sure the number of non-zero entries concentrates around it's mean and we can probably do something with that.}
 
 
-\subsection{EEG Data}
 
 
-\subsection{...}
 
-
-\newpage
-
-\section{Next Directions}
-
-There are several potential directions we may pursue, summarized below
-\begin{itemize}
-\item{Heteroskedasticity: in our model, we assumed the residual error in each task did not depend on $\bX.$ We can relax this and model the residual errors using the product-of-trees formulation in \citet{Pratola2017}}
-\item{Mixed type data: Frequently we observe both continuous and discrete data an wish to model both jointly. We can use ideas from \citet{Pourmohamad2016} or \citet{Murray2017}}
-\item{Sparsity in $\Phi$ and discovering the latent dimension $D$: throughout, we have focused on a fixed $D,$ which must be specified by the user. Implicit in our development thus far is the assumption that variation in the $q$-dimensional response is adequately captured using $D$ latent basis functions. In some cases, we have taken $D > q,$ in the hopes that the $u_{d}$'s form an over-complete basis. But in many applications, when $q$ is larger, there may be substantial interest in learning a \textit{lower}-dimensional representation where the latent dimension $D \ll q$ must be learned. We can elaborate the model above to accommodate this setting by placing a sparsity-inducing prior on the elements of $\Phi.$ One example is a spike-and-slab prior in the style of \citet{Titsias2011}. Rather than using a fixed Bernoulli prior for the indicators, however, we may resort to an Indian Buffet Process style prior. This will in fact place a mild identifiability constraint on the $u_{d}$'s and is quite similar to ideas from sparse factor analysis.}
-\end{itemize}
-
-
-\newpage
-\section{Illustration}
-
-To illustrate the proposed procedure, consider the following toy dataset with $n = 1000, p = 2$ and $q = 2.$
-We drew the two predictors $X_{1}$ and $X_{2}$ uniformly from the unit interval and considered four true basis functions, depicted in Figure~\ref{fig:toy_example_basis}.
-All but $u_{2}$ is a function of $X_{1}$ alone and $u_{2}$ depends on $X_{2}$ only through the indicator $\mathbf{1}(X_{2} > 0.5)$:
-$$
-u_{2} = 3X_{1} + (2 - 5\times\mathbf{1}(X_{2} > 0.5))\sin\left(\pi X_{1}\right) - 2\times \mathbf{1}(X_{2} > 0.5).
-$$
-The functions $u_{3}$ and $u_{4}$ were drawn from Gaussian processes.
-$u_{3}$ was drawn from a GP with squared exponential kernel with length scale 0.25, while $u_{4}$ came from a GP whose kernel was a product of a squared exponential and periodic kernel, both with length scales 0.1.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width = \textwidth]{../images/toy_example_basis.png}
-\caption{Basis functions used to generate toy dataset}
-\label{fig:toy_example_basis}
-\end{figure}
-
-To construct $f_{1}$ and $f_{2},$ we drew each $\phi_{k,d} \sim N(0,1)$ and then set $y_{i,1} = f_{1}(\bx_{i}) + 0.75\epsilon_{i,1}$ and $y_{i,2} = f_{2}(\bx_{i}) + 0.5\epsilon_{i,2}$ where $\epsilon_{i,1}, \epsilon_{i,2} \sim N(0,1).$
-Figure~\ref{fig:toy_example_data} plots $f_{1}$ and $f_{2}$ along with the observed data from both tasks.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width = 0.75\textwidth]{../images/toy_example_data.png}
-\caption{Two tasks, $f_{1}$ (red) and $f_{2}$ (blue). Realizations from $f_{1}$ are plotted with $\bullet$'s while realizations from $f_{2}$ are plotted with $\times$'s.}
-\label{fig:toy_example_data}
-\end{figure}
-
-Recall that the main idea is to leverage the fact that $f_{1}$ and $f_{2}$ are dependent while learning them.
-As a baseline, we see how well we can learn these two functions separately, using individual BART fits.
-Figure~\ref{fig:toy_example_sepBART_fits} shows the posterior mean $f_{1}$ and $f_{2}$ using the default hyper-parameter specifications.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width = 0.75\textwidth]{../images/toy_example_sepBART_fits.png}
-\caption{Points are the posterior means of $f_{1}$ and $f_{2}$ resulting from separate BART fits with default hyper-parameters. The true functions are plotted as lines.}
-\label{fig:toy_example_sepBART_fits}
-\end{figure}
-
-The in-sample root mean-squared errors $\left(n^{-1}\sum{\left(\hat{f}(\bx_{i}) - f(\bx_{i})\right)^{2}}\right)^{1/2}$ are 0.169 for task 1 and 0.168 for task 2.
-The out-of-sample RMSEs are 0.181 and 0.202, respectively.
-The hope is that our proposed models can achieve better performance than these baselines.
 
 
 
@@ -593,9 +642,6 @@ The hope is that our proposed models can achieve better performance than these b
 %u_{1}(x_{1},x_{2}) &= 3(x_{1} - x_{2})^{2} \times \max\left\{x_{1},x_{2}\right\} \\
 %u_{2}(x_{1},x_{2}) &= 3x_{1} + (2 - 3
 %\end{align*}
-
-
-\newpage
 
 \begin{comment}
 \section{Multi-task GPs}
@@ -813,6 +859,9 @@ $$
 
 \end{itemize}
 \end{comment}
+
+
+
 \begin{comment}
 \section{LMC BART}
 
@@ -1132,6 +1181,4 @@ Also the complexity can be as bad as $O(q^{3}n^{3}).$
 %We can potentially calibrate $\sigma^{2}$ using the usual CGM10 tricks. 
 
 \end{comment}
-\newpage
-\bibliography{bart.bib}
 \end{document}

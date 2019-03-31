@@ -1,5 +1,12 @@
 \begin{thebibliography}{}
 
+\bibitem[{\'A}lvarez et~al., 2010]{Alvarez2010}
+{\'A}lvarez, M.~A., Luengo, D., Titsias, M.~K., and Lawrence, N.~D. (2010).
+\newblock Efficient multioutput {Gaussian} processes through variational
+  inducing kernels.
+\newblock In {\em Proceedings of the 13th International Conference of Artifical
+  Intelligence and Statistics (AISTATS)}.
+
 \bibitem[{\'A}lvarez et~al., 2012]{Alvarez2012}
 {\'A}lvarez, M.~A., Rosasco, L., and Lawrence, N.~D. (2012).
 \newblock Kernels for vector-valued functions: A review.
@@ -83,16 +90,35 @@ Murray, J.~S. (2017).
   count response.
 \newblock arXiv:1701.01503.
 
+\bibitem[Nguyen and Bonilla, 2014]{Nguyen2014}
+Nguyen, T.~V. and Bonilla, E.~V. (2014).
+\newblock Collaborative multi-output {Gaussian} processes.
+\newblock In {\em Proceedings of the Thirtieth Conference of Uncertainty in
+  Artifical Intelligence}, UAI '14, pages 643 -- 652, Arlington, Virginia,
+  United States of America. AUAI Press.
+
 \bibitem[Pourmohamad and Lee, 2016]{Pourmohamad2016}
 Pourmohamad, T. and Lee, H. K.~H. (2016).
 \newblock Multivariate stochastic process models for correlated responses of
   mixed type.
 \newblock {\em Bayesian Analysis}, 11(3):797 -- 820.
 
+\bibitem[Pratola, 2016]{Pratola2016}
+Pratola, M.~T. (2016).
+\newblock Efficient metropolis-hastings proposal mechanisms for {B}ayesian
+  regression tree models.
+\newblock {\em Bayesian Analysis}, 11(3):885 -- 911.
+
 \bibitem[Pratola et~al., 2017]{Pratola2017}
 Pratola, M.~T., Chipman, H.~A., George, E.~I., and McCulloch, R.~E. (2017).
 \newblock Heteroscedastic bart using multiplicative regression trees.
 \newblock arXiv:1709.07542.
+
+\bibitem[Requeima et~al., 2019]{Requeima2019}
+Requeima, J., Tebbutt, W., Bruinsma, W., and Turner, R.~E. (2019).
+\newblock The {Gaussian} process autoregressive model (gpar).
+\newblock In {\em AISTATS 2019 -- Proceedings of the 22nd International
+  Conference on Artifical Intelligence and Statistics}, volume~89.
 
 \bibitem[Teh et~al., 2005]{Teh2005}
 Teh, Y.~W., Seeger, M., and Jordan, M.~I. (2005).

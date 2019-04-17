@@ -49,6 +49,9 @@ public:
   friend double bd_multi(tree &x, const arma::mat &Omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
   friend double bd_uni(tree &x, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
   //friend double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo &pi, RNG &gen);
+  friend double bd_uni(tree &x, const double &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, RNG &gen);
+
+  
   friend double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
 //#ifdef MPIBART
 //  friend bool bd(int k, tree& x, arma::mat Omega, xinfo& xi, pinfo& pi, RNG& gen, size_t numslaves);

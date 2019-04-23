@@ -74,7 +74,10 @@ double pgrow(tree::tree_p n, xinfo &xi, tree_prior_info &pi); // overloaded for 
 
 //--------------------------------------------------
 // prepare the data
-void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::vec &y_col_max, arma::vec &y_col_min);
+void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::vec &y_col_max, arma::vec &y_col_min); // for old versions
+void prepare_y(arma::mat &Y, std::vector<double> &y_col_mean, std::vector<double> &y_col_sd, std::vector<double> &y_col_max, std::vector<double> &y_col_min);
+void prepare_y(arma::vec &Y, double &y_mean, double &y_sd, double &y_max, double &y_min);
+
 //--------------------------------------------------
 //get sufficients stats for all bottom nodes
 void allsuff(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, std::vector<sinfo>& sv);
@@ -146,6 +149,9 @@ void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinf
 
 void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, sinfo &si, dinfo_slfm &di, double sigma_mu); //for SLFM
 
+void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat &Phi, const std::vector<double> &sigma, sinfo &si, data_info &di, tree_prior_info &tree_pi, phi_prior_info &phi_pi); // overloaded for the new prior info classes.
+
+
 //--------------------------------------------------
 //fit
 void fit(tree& t, xinfo& xi, dinfo& di, std::vector<double>& fv);
@@ -213,7 +219,7 @@ void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior
 
 
 void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
-
+void drmu_slfm(tree &t, const arma::mat &Phi, const std::vector<double> &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, phi_prior_info &phi_pi, RNG &gen); // overloaded for the new prior info classes
 //--------------------------------------------------
 //write cutpoint information to screen
 void prxi(xinfo& xi);
@@ -228,8 +234,16 @@ void makexinfominmax(size_t p, xinfo& xi, size_t nc, std::vector<double> &minx, 
 
 void update_sigma_uni(double &sigma, sigma_prior_info &sigma_pi, data_info &di, RNG &gen);
 
+// function to update sigma in multi-output setting
+void update_sigma(std::vector<double> &sigma, std::vector<sigma_prior_info> &sigma_pi, data_info &di, RNG &gen);
+
+
 // Functions to update Phi in SLFM
 void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
+
+// overloaded for the new prior information classes
+void update_Phi_gaussian(arma::mat &Phi, const std::vector<double> &sigma, data_info &di, phi_prior_info &phi_pi, RNG &gen);
+
 
 void update_Phi_ss(arma::mat &Phi, arma::vec &theta, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi,  RNG &gen);
 // Function to update sigma in SLFM

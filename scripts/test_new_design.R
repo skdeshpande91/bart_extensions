@@ -5,8 +5,7 @@ source("scripts/makeCutpoints.R")
 
 sourceCpp("src/univariate_BART.cpp")
 sourceCpp("src/sep_BART.cpp")
-
-sourceCpp("src/sep_bartFit.cpp")
+sourceCpp("src/slfm_BART.cpp")
 
 
 n <- 1000
@@ -41,22 +40,39 @@ Y <- matrix(cbind(Y1,Y2), nrow = n, ncol = 2)
 test1 <- univariate_BART(Y[,1], X_train, X_test, cutpoints, verbose = TRUE)
 test2 <- univariate_BART(Y[,2], X_train, X_test, cutpoints, verbose = TRUE)
 
+sep_test <- sep_BART(Y, X_train, X_test, cutpoints, verbose = TRUE,  nd = 5, burn = 100)
 
-sep_test <- sep_BART(Y, X_train, X_test, cutpoints, verbose = TRUE)
+
+sourceCpp("src/slfm_bartFit.cpp")
+
+slfm_test <- slfm_BART(Y, X_train, X_test, cutpoints, D = 10, m = 25)
+
+old_slfm_test <- slfm_bartFit(Y, X_train, X_test, cutpoints, D = 10, m = 25)
 
 
-sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints, verbose = TRUE)
+Y_miss <- Y
+Y_miss[sample(1:n,10), 1] <- NA
+Y_miss[sample(1:n, 20), 2] <- NA
+
+test1_missing <- univariate_BART(Y_miss[,1], X_train, X_test, cutpoints, verbose = TRUE)
+test2_missing <- univariate_BART(Y_miss[,2], X_train, X_test, cutpoints, verbose = TRUE)
+
+sep_test_missing <- sep_BART(Y_miss, X_train, X_test, cutpoints, verbose = TRUE)
+
+sep_fit <- sep_bartFit(Y, X_train, X_test, cutpoints, verbose = TRUE,)
 
 # check to see our new code univariate_BART gives similar predictive performance results
 
 sqrt( (mean( (f1_test - rowMeans(test1$f_test_samples))^2)))
 sqrt( (mean( (f1_test - rowMeans(sep_test$f_test_samples[,1,]))^2)))
-sqrt( (mean( (f1_test - rowMeans(sep_fit$f_test_samples[,1,]))^2)))
-
-
-
+sqrt( (mean( (f1_test - rowMeans(test1_missing$f_test_samples))^2)))
+sqrt( (mean( (f1_test - rowMeans(sep_test_missing$f_test_samples[,1,]))^2)))
 
 sqrt( (mean((c(f2_test_0, f2_test_1) - rowMeans(test2$f_test_samples))^2)))
 sqrt( (mean((c(f2_test_0, f2_test_1) - rowMeans(sep_test$f_test_samples[,2,]))^2)))
+sqrt( (mean((c(f2_test_0, f2_test_1) - rowMeans(test2_missing$f_test_samples))^2)))
+sqrt( (mean((c(f2_test_0, f2_test_1) - rowMeans(sep_test_missing$f_test_samples[,2,]))^2)))
+
+
 sqrt( (mean((c(f2_test_0, f2_test_1) - rowMeans(sep_fit$f_test_samples[,2,]))^2)))
 

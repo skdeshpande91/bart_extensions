@@ -50,15 +50,12 @@ Rcpp::List univariate_BART(arma::vec Y,
   
   size_t n = Y.size(); // Should always be n_obs * q
 
-
-  // always center and scale the y's
-  arma::vec Y_orig = Y;
-  double y_col_mean = arma::mean(Y);
-  double y_col_sd = arma::stddev(Y);
-  Y -= y_col_mean;
-  Y /= y_col_sd;
-  //Rcpp::Rcout << "Centered and scaled Y" << endl;
+  double y_mean = 0.0;
+  double y_sd = 0.0;
+  double y_max = 0.0;
+  double y_min = 0.0;
   
+  prepare_y(Y, y_mean, y_sd, y_max, y_min);
 
   // create pointer for x, y, and x_pred
   double* y_ptr = new double[n];
@@ -108,7 +105,7 @@ Rcpp::List univariate_BART(arma::vec Y,
   
   for(size_t i = 0; i < n_obs; i++){
     allfit[i] = 0.0;
-    r_full[i] = y_ptr[i] - allfit[i];
+    if(delta_ptr[i] == 1) r_full[i] = y_ptr[i] - allfit[i];
   }
   
   // initialize values in r_partial and ftemp. These initial values don't matter much at all
@@ -130,7 +127,7 @@ Rcpp::List univariate_BART(arma::vec Y,
   tree_pi.pb = 0.5;
   tree_pi.alpha = 0.95;
   tree_pi.beta = 2.0;
-  tree_pi.sigma_mu = (Y.max() - Y.min())/(2.0 * kappa * sqrt( (double) m)); // this is the wbart default
+  tree_pi.sigma_mu = (y_max - y_min)/(2.0 * kappa * sqrt( (double) m)); // this is the wbart default
   tree_pi.r_p = &r_partial[0]; // whenever we update trees, we need the partial residuals
   
   sigma_prior_info sigma_pi;
@@ -168,12 +165,12 @@ Rcpp::List univariate_BART(arma::vec Y,
   if(verbose == true) Rcpp::Rcout << "  Created arrays to hold residuals etc." << endl;
   
   // created containers for output
-  arma::mat f_train_samples = arma::zeros<arma::mat>(n_obs, nd); // f_train_samples(i,iter) = y_col_mean + y_col_sd * allfit[i];
-  arma::mat f_test_samples = arma::zeros<arma::mat>(n_pred, nd); // f_test_samples(i,iter) = y_col_mean + y_col_sd * allfit_pred[i];
-  arma::vec sigma_samples = arma::zeros<arma::vec>(nd); // sigma_samples(iter) = sigma * y_col_sd;
+  arma::mat f_train_samples = arma::zeros<arma::mat>(n_obs, nd);
+  arma::mat f_test_samples = arma::zeros<arma::mat>(n_pred, nd);
+  arma::vec sigma_samples = arma::zeros<arma::vec>(nd);
 
   // these are strictly for diagnostics
-  arma::mat alpha_samples = arma::zeros<arma::mat>(m, nd+burn); // alpha_samples(t, iter) is the MH acceptable probability for tree t
+  arma::mat alpha_samples = arma::zeros<arma::mat>(m, nd+burn); // alpha_samples(t, iter) is the MH acceptance probability for tree t
   arma::mat tree_size_samples = arma::zeros<arma::mat>(m, nd+burn); //
 
   Rcpp::Rcout << "Starting MCMC" << endl;
@@ -195,7 +192,7 @@ Rcpp::List univariate_BART(arma::vec Y,
           Rcpp::stop("nan in ftemp");
         } // closes if checking whether ftemp[i] is nan
         allfit[i] = allfit[i] - ftemp[i]; // temporarily remove fit of tree t from allfit
-        r_partial[i] = y_ptr[i] - allfit[i]; // allfit contains fit of (m-1) trees so this is the correct value of r_partial
+        if(delta_ptr[i] == 1) r_partial[i] = y_ptr[i] - allfit[i]; // allfit contains fit of (m-1) trees so this is the correct value of r_partial
       } // closes loop over observations updating allfit and r_partial
       
       alpha_samples(t, iter) = bd_uni(t_vec[t], sigma, xi, di, tree_pi,gen); // do the birth/death move
@@ -205,7 +202,7 @@ Rcpp::List univariate_BART(arma::vec Y,
       for(size_t i = 0; i < n_obs; i++){
         if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp");
         allfit[i] += ftemp[i]; // add fit of tree t back to allfit
-        r_full[i] = y_ptr[i] - allfit[i]; // update the full residual
+        if(delta_ptr[i] == 1) r_full[i] = y_ptr[i] - allfit[i]; // update the full residual
       }
       tree_size_samples(t, iter) = t_vec[t].treesize(); //
     } // closes loop over trees
@@ -216,10 +213,10 @@ Rcpp::List univariate_BART(arma::vec Y,
     // save samples
     if(iter >= burn){
       // save training fit
-      for(size_t i = 0; i < n_obs; i++) f_train_samples(i,iter-burn) = y_col_mean + y_col_sd * allfit[i];
+      for(size_t i = 0; i < n_obs; i++) f_train_samples(i,iter-burn) = y_mean + y_sd * allfit[i];
       
       // save sigm
-      sigma_samples(iter-burn) = y_col_sd * sigma;
+      sigma_samples(iter-burn) = y_sd * sigma;
       
       // save test output. start by clearing all of the elements in allfit_pred and ftemp_pred
       for(size_t i = 0; i < n_pred; i++){
@@ -231,7 +228,7 @@ Rcpp::List univariate_BART(arma::vec Y,
         for(size_t i = 0; i < n_pred; i++) allfit_pred[i] += ftemp_pred[i]; // update allfit_pred;
       }
       // at this point allfit_pred contains total fit from the m trees on the test inputs
-      for(size_t i = 0; i < n_pred; i++) f_test_samples(i,iter-burn) = y_col_mean + y_col_sd * allfit_pred[i];
+      for(size_t i = 0; i < n_pred; i++) f_test_samples(i,iter-burn) = y_mean + y_sd * allfit_pred[i];
       
     } // closes if checking that iter > burn and that we should save samples
   } // closes MCMC loop

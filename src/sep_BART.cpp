@@ -48,10 +48,10 @@ Rcpp::List sep_BART(arma::mat Y,
   size_t n = Y.size();
   
   // Center and scale Y. Also compute columns mean, sd, min, and max
-  arma::vec y_col_mean = arma::zeros<arma::vec>(q); // holds the original mean of each column of Y
-  arma::vec y_col_sd = arma::zeros<arma::vec>(q); // holds the original sd of each column of Y
-  arma::vec y_col_max = arma::zeros<arma::vec>(q); // holds the max of the scaled columns of Y
-  arma::vec y_col_min = arma::zeros<arma::vec>(q); // holds the min of the scaled columns of Y
+  std::vector<double> y_col_mean(q); // holds the original mean of each column of Y
+  std::vector<double> y_col_sd(q); // holds the original sd of each column of Y
+  std::vector<double> y_col_max(q); // holds the max of the scaled columns of Y
+  std::vector<double> y_col_min(q); // holds the min of the scaled columns of Y
   
   prepare_y(Y, y_col_mean, y_col_sd, y_col_max, y_col_min);
   
@@ -90,9 +90,13 @@ Rcpp::List sep_BART(arma::mat Y,
   // Initialize sigma
   std::vector<double> sigma(q); // vector of residual standard deviations
   for(size_t k = 0; k < q; k++) sigma[k] = 1.0;
+  Rcpp::Rcout << "Initial values of sigma: " ;
+  for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << sigma[k] ;
+  Rcpp::Rcout << endl;
+  
   
   // Initialize trees and pointers for fit and residuals
-  std::vector<std::vector<tree > > t_vec(q, std::vector<tree>(m));
+  std::vector<std::vector<tree> > t_vec(q, std::vector<tree>(m));
   
   double* allfit = new double[n]; // allfit[k + i*q] is estimated fit of k^th task for i^th observation
   double* allfit_pred = new double[n_pred*q];
@@ -100,10 +104,10 @@ Rcpp::List sep_BART(arma::mat Y,
   double* ftemp_pred = new double[n_pred];
   
   double* r_full = new double[n]; // holds all residuals for training observations
-  double* r_partial = new double[n_obs]; // holds particle residuals
+  double* r_partial = new double[n_obs]; // holds partial residuals
   
   for(size_t k = 0; k < q; k++){
-    for(size_t t = 0; t < m; t++) t_vec[k][m].setm(0.0);
+    for(size_t t = 0; t < m; t++) t_vec[k][t].setm(0.0);
     
     for(size_t i = 0; i < n_obs; i++){
       allfit[k + i*q] = 0.0;
@@ -131,7 +135,7 @@ Rcpp::List sep_BART(arma::mat Y,
     tree_pi[k].pb = 0.5;
     tree_pi[k].alpha = 0.95;
     tree_pi[k].beta = 2.0;
-    tree_pi[k].sigma_mu = (y_col_max(k) - y_col_min(k))/(2.0 * kappa * sqrt( (double) m));
+    tree_pi[k].sigma_mu = (y_col_max[k] - y_col_min[k])/(2.0 * kappa * sqrt( (double) m));
     tree_pi[k].r_p = &r_partial[0];
     // possibly problematic that we have every element of tree_pi tracking r_partial but we'll leave it for now
     
@@ -179,10 +183,10 @@ Rcpp::List sep_BART(arma::mat Y,
   // diagnostic information
   arma::mat alpha_samples = arma::zeros<arma::mat>(m*q, nd + burn);
   arma::mat tree_size_samples = arma::zeros<arma::mat>(m*q, nd + burn);
-  
   if(verbose == true) Rcpp::Rcout << "  Starting MCMC" << std::endl;
   time_t tp;
   int time1 = time(&tp);
+
   for(int iter = 0; iter < (nd + burn); iter++){
     if(verbose == true){
       if(iter < burn & iter%50 == 0) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << std::endl;
@@ -191,6 +195,7 @@ Rcpp::List sep_BART(arma::mat Y,
     
     // Loop over each task and update the corresponding trees
     for(size_t k = 0; k < q; k++){
+      if(sigma[k] != sigma[k]) Rcpp::Rcout << "iter " << iter << " k = " << k << " sigma[k] is nan" << endl;
       for(size_t t = 0; t < m; t++){
         fit(t_vec[k][t], xi, di, ftemp); // get current fit of tree t for task k
         for(size_t i = 0; i < n_obs; i++){
@@ -198,26 +203,28 @@ Rcpp::List sep_BART(arma::mat Y,
           allfit[k + i*q] -= ftemp[i]; // subtract fit of tree t, task k from allfit
           if(delta_ptr[k + i*q] == 1) r_partial[i] = y_ptr[k + i*q] - allfit[k + i*q]; // update partial residual
         }
-        alpha_samples(t, iter) = bd_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // do the birth/death move
+        alpha_samples(t + k*m, iter) = bd_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // do the birth/death move
         drmu_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // draw the new values of mu
         fit(t_vec[k][t], xi, di, ftemp); // Update the fit from tree t, task k
         
         for(size_t i = 0; i < n_obs; i++){
           if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp");
           allfit[k + i*q] += ftemp[i]; // add fit of tree t, outcome k back to allfit
-          if(delta_ptr[k +i*q] == 1) r_full[i] = y_ptr[k + i*q] - allfit[k + i*q]; // update full residual
+          if(delta_ptr[k +i*q] == 1) r_full[k + i*q] = y_ptr[k + i*q] - allfit[k + i*q]; // update full residual
         }
       } // closes loop over the trees
-      update_sigma_uni(sigma[k], sigma_pi[k], di, gen);
     } // closes loop over the tasks
+    
+    update_sigma(sigma, sigma_pi, di, gen);
     if(iter >= burn){
       for(size_t k = 0; k < q; k++){
       // save training fits and sigma
-        for(size_t i = 0; i < n_obs; i++) f_train_samples(i,k,iter-burn) = y_col_mean(k) + y_col_sd(k) * allfit[k + i*q];
-        sigma_samples(k,iter-burn) = y_col_sd(k) * sigma[k];
+        for(size_t i = 0; i < n_obs; i++) f_train_samples(i,k,iter-burn) = y_col_mean[k] + y_col_sd[k] * allfit[k + i*q];
+        sigma_samples(k,iter-burn) = y_col_sd[k] * sigma[k];
+        
         // clear the appropriate elements in allfit_pred and ftemp_pred
         for(size_t i = 0; i < n_pred; i++){
-          ftemp_pred[k + i*q] = 0.0;
+          ftemp_pred[i] = 0.0;
           allfit_pred[k + i*q] = 0.0;
         }
         // loop over the trees for outcome k to to build up the complete fit
@@ -226,11 +233,16 @@ Rcpp::List sep_BART(arma::mat Y,
           for(size_t i = 0; i < n_pred; i++) allfit_pred[k + i*q] += ftemp_pred[i];
         }
         // now we can save the samples for the test outputs
-        for(size_t i = 0; i < n_pred; i++) f_test_samples(i,k,iter-burn) = y_col_mean(k) + y_col_sd(k) * allfit_pred[k + i*q];
+        for(size_t i = 0; i < n_pred; i++) f_test_samples(i,k,iter-burn) = y_col_mean[k] + y_col_sd[k] * allfit_pred[k + i*q];
       }// closes loop over the tasks
     } // closes if checking that iter >= burn and that we must save our samples
+    //Rcpp::Rcout << "iter " << iter << " sigma:" ;
+    //for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << sigma[k] * y_col_sd[k];
+    //Rcpp::Rcout << endl;
+
   } // closes main MCMC loop
   if(verbose == true) Rcpp::Rcout << "  Finished MCMC" << endl;
+
   int time2 = time(&tp);
   if(verbose == true) Rcpp::Rcout << "time for MCMC " << time2 - time1;
   

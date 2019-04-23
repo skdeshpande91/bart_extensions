@@ -53,6 +53,7 @@ public:
 
   
   friend double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
+  friend double bd_slfm(tree &x, const arma::mat &Phi, const std::vector<double> &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, phi_prior_info &phi_pi, RNG &gen); // overloaded  for the new prior info classes
 //#ifdef MPIBART
 //  friend bool bd(int k, tree& x, arma::mat Omega, xinfo& xi, pinfo& pi, RNG& gen, size_t numslaves);
 //#else

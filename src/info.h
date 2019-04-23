@@ -16,6 +16,7 @@ public:
   double weight; // likelihood weight for KL-coarsening
   double *x; // i^th observation of j^th predictor is *(x + p*i + j) or x[j + p*i]
   double *y; // i^th observation of k^th outcome is *(y + q*i + k) or y[k + q*i]
+  double *af; // allfit
   double *r_f; // i^th full residual of k^th outcome is *(r_f + q*i + k)
   double *delta; // will track missing observations. specifically delta[k + i*q] = 1 if we observe y[i,k] and 0 otherwise
   //constructor
@@ -47,13 +48,14 @@ public:
 class phi_prior_info{
 public:
   size_t D; // number of basis functions
+  size_t d; // which basis function are we updating currently
   size_t q; // number of outcomes
-  double* ufit; // i^th prediction from d^th basis function is ufit[d + i*D]
+  double* uf; // i^th prediction from d^th basis function is ufit[d + i*D]
   std::vector<double> sigma_phi; // expected lenght is D
   std::vector<double> a_theta; // For d^th basis function, we have theta_d ~ Beta(a_theta[d], b_theta[d])
   std::vector<double> b_theta; // For d^th basis function we have theta_d ~ Beta(a_theta[d], b_theta[d])
   // constructor
-  phi_prior_info(){D = 1; q = 1; ufit = 0; sigma_phi = std::vector<double>(1); a_theta = std::vector<double>(1); b_theta = std::vector<double>(1);}
+  phi_prior_info(){D = 1; q = 1; uf = 0; sigma_phi = std::vector<double>(1); a_theta = std::vector<double>(1); b_theta = std::vector<double>(1);}
 };
 
 //============================================================

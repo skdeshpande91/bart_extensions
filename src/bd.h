@@ -18,6 +18,7 @@ double bd_uni(tree &x, const double &sigma, xinfo &xi, data_info &di, tree_prior
 
 
 double bd_slfm(tree &x, const arma::mat &Phi, const arma::vec &sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
+double bd_slfm(tree &x, const arma::mat &Phi, const std::vector<double> &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, RNG &gen); // overloaded for the new prior info classes
 
 
 #endif

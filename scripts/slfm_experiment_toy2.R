@@ -7,7 +7,7 @@ load("data/toy_example2.RData")
 cutpoints <- makeCutpoints(X_train, gridlen = 10000)
 
 
-source
+
 sourceCpp("src/slfm_bart.cpp")
 sourceCpp("src/sep_bartFit.cpp")
 

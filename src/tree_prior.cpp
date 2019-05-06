@@ -33,7 +33,7 @@ void draw_tree(tree& x, xinfo &xi, double alpha, double beta, RNG &gen){
   size_t max_depth = 0;
   size_t prev_max_depth = 0; // from previous round what is the max depth
   bool flag = true; // flag that indicates that we can continue trying to grow tree
-  int counter = 0; // a cluge to make sure we don't grow the tree infinitely
+  int counter = 0; // a kluge to make sure we don't grow the tree infinitely
   double unif = 0.0;
   while(flag && counter < 100){
     // find the valid bottom nodes

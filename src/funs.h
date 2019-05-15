@@ -79,6 +79,11 @@ void prepare_y(arma::mat &Y, std::vector<double> &y_col_mean, std::vector<double
 void prepare_y(arma::vec &Y, double &y_mean, double &y_sd, double &y_max, double &y_min);
 
 //--------------------------------------------------
+// make cutpoints
+
+void make_cutpoints(xinfo &xi, const size_t n_obs, const size_t p, double *x_ptr, const size_t n_cutpoints);
+
+//--------------------------------------------------
 //get sufficients stats for all bottom nodes
 void allsuff(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, std::vector<sinfo>& sv);
 void allsuff(tree& x, xinfo& xi, dinfo_slfm& di, tree::npv& bnv, std::vector<sinfo>& sv); // overloaded for  SLFM
@@ -237,6 +242,7 @@ void update_sigma_uni(double &sigma, sigma_prior_info &sigma_pi, data_info &di, 
 // function to update sigma in multi-output setting
 void update_sigma(std::vector<double> &sigma, std::vector<sigma_prior_info> &sigma_pi, data_info &di, RNG &gen);
 
+//void update_latent_confounder(xinfo &xi, arma::cube &lat_conf_samples, arma::mat lat_conf_alpha_samples, iter, data_info &di, RNG &gen);
 
 // Functions to update Phi in SLFM
 void update_Phi_gaussian(arma::mat &Phi, const arma::vec &sigma, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);

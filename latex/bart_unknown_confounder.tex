@@ -1,0 +1,126 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, amsthm, float, fullpage, graphicx, multirow,parskip, subcaption, setspace}
+\usepackage{comment}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, positioning}
+\usetikzlibrary{quotes, angles}
+\usepackage{rotating}
+\usepackage{hyperref}
+\usepackage{natbib}
+
+\definecolor{PennRed}{RGB}{152, 30 50}
+\definecolor{PennBlue}{RGB}{0, 44, 119}
+\definecolor{PennGreen}{RGB}{94, 179,70}
+\definecolor{PennViolet}{RGB}{141, 76, 145}
+\definecolor{PennSkyBlue}{RGB}{14, 118, 188}
+\definecolor{PennOrange}{RGB}{243, 117, 58}
+\definecolor{PennBrightRed}{RGB}{223,82, 78}
+
+
+\hypersetup{pdfborder = {0 0 0.5 [3 3]}, colorlinks = true, linkcolor = PennBrightRed, citecolor = PennSkyBlue}
+
+\bibliographystyle{apalike}
+
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
+
+
+
+\title{BART with an Unobserved Predictor}
+\author{Sameer K. Deshpande}
+
+\begin{document}
+\maketitle
+\def\C{\mathbb{C}}
+\def\R{\mathbb{R}}
+\def\Q{\mathbb{Q}}
+\def\Z{\mathbb{Z}}
+%\def\N{\mathbb{N}}
+\def\N{\text{N}}
+\def\P{\mathbb{P}}
+\def\E{\mathbb{E}}
+\def\by{\mathbf{y}}
+\def\bx{\mathbf{x}}
+\def\bz{\mathbf{z}}
+\def\bw{\mathbf{w}}
+\def\br{\mathbf{r}}
+\def\bu{\mathbf{u}}
+\def\bY{\mathbf{Y}}
+\def\bX{\mathbf{X}}
+\def\bf{\mathbf{f}}
+\def\bgamma{\boldsymbol{\gamma}}
+\def\bSigma{\boldsymbol{\Sigma}}
+\def\bsigma{\boldsymbol{\sigma}}
+\def\bmu{\boldsymbol{\mu}}
+
+\def\bu{\boldsymbol{u}}
+
+\def\M{\mathcal{M}}
+\def\T{\mathcal{T}}
+\def\tilT{\tilde{T}}
+
+\section{Setup}
+\label{sec:setup}
+
+Suppose that we observe $n$ independent pairs of data $(\bx_{i}, y_{i})$ and that the usual non-parametric regression model $y_{i} = f(\bx_{i}) + \sigma\varepsilon_{i}, \varepsilon_{i} \sim N(0,1)$ is mis-specified.
+In particular, suppose that there are $p_{u}$ missing predictors $u_{i}$ and that in actuality $y_{i} = f(\bx_{i}, u_{i}) + \sigma \varepsilon.$
+We use BART \citep{Chipman2010} to make inference about $f.$
+
+If we had in fact observed each $u_{i},$ we may use the Gibbs sampler introduced in \citep{Chipman2010} to simulate approximate posterior draws of $f.$
+Since we have no observed $u_{i},$ we instead place a standard normal prior $u_{i} \sim N(0, I_{p_{u}})$ on the latent predictors and augment the Gibbs sampler to sample from the posterior distribution of $u_{i}$ before updating the remaining parameters.
+To this end, first note that the conditional posterior distribution of $\bu = \left\{u_{1}, \ldots, u_{n}\right\}$ can be written as
+$$
+\pi(\bu \mid \sigma^{2}, \bf, \by) \propto \prod_{i = 1}^{n}{\exp\left\{-\frac{1}{2\sigma^{2}}\left(y_{i} - \bf(\bx_{i}, u_{i})\right)^{2} - \frac{1}{2}u_{i}^{\top}u_{i}\right\}}
+$$
+This means that in our Gibbs sampler, we may update each $u_{i}$ independently.
+To do so, we use a Metropolis step in which we accept a randomly drawn proposal $u_{i}^{\star} \sim Q(u_{i})$ with probability
+$$
+\alpha(u_{i}^{\star}, u_{i}) = \min\left\{\frac{\exp\left\{-\frac{\left(y_{i} - \bf(\bx_{i}, u^{\star}_{i})\right)^{2}}{2\sigma^{2}} - \frac{u_{i}^{\star\top}u^{\star}_{i}}{2}\right\}}{\exp\left\{-\frac{\left(y_{i} - \bf(\bx_{i}, u_{i})\right)^{2}}{2\sigma^{2}} - \frac{u_{i}^{\top}u_{i}}{2}\right\}}, 1 \right\}
+$$
+Letting $\Sigma_{i}$ denote the current estimate of $\text{Cov}(u_{i}),$ we follow \citet{Roberts2009} and use the following jump distribution
+$$
+Q(u_{i}) = (1 - \beta) N(u, (2.38)^{2}\Sigma_{i}) + \beta N(u, (0.1)^{2}I_{p_{u}})
+$$
+where $\beta = 0.05.$
+
+
+In particular, suppose that there is a missing prediction $u_{i}$ and that in actuality $y_{i} = f(\bx_{i}, u_{i}) + \sigma\varepsilon_{i}.$
+In other words the conditional mean function $\E\left[Y \mid X, U\right]$ is some non-linear function that may involve interactions between $X$ and $U.$
+When we fully observe each covariate, we can use the usual Gibbs sampler for BART.
+In this setting, where we do not observe the missing predictor, we augment this Gibbs sampler by simulating the values of $\bu = (u_{1}, \ldots, u_{n}).$
+This involves placing a prior on $\bu$ and then updating its values according to the appropriate posterior.
+
+
+\section{Sensitivity Analyses}
+\label{sec:sensitivity_analyses}
+
+
+
+\end{document}

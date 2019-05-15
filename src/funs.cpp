@@ -343,6 +343,97 @@ void prepare_y(arma::vec &Y, double &y_mean, double &y_sd, double &y_max, double
 
 
 //--------------------------------------------------
+
+void make_cutpoints(xinfo &xi, const size_t n_obs, const size_t p, double *x_ptr, const size_t n_cutpoints)
+{
+  xi.resize(p);
+  double x_min = 0.0;
+  double x_max = 0.0;
+  double x_range = 0.0;
+  
+  bool binary_flag = false;
+  for(size_t j = 0; j < p; j++){
+    // loop over to see if it is a binary indicator
+    binary_flag = true;
+    for(size_t i = 0; i < n_obs; i++){
+      if( (x_ptr[j + i*p] != 0.0) && (x_ptr[j + i*p] != 1.0) ){
+        binary_flag = false;
+        break;
+      }
+    }
+    if(binary_flag == true){
+      xi[j].clear();
+      xi[j].push_back(0.0);
+      xi[j].push_back(1.0);
+    } else{
+      x_min = x_ptr[j + 0*p];
+      x_max = x_ptr[j + 0*p];
+      for(size_t i = 0; i < n_obs; i++){
+        if(x_min > x_ptr[j + i * p]) x_min = x_ptr[j + i * p];
+        if(x_max < x_ptr[j + i * p]) x_max = x_ptr[j + i * p];
+      }
+      x_range = x_max - x_min;
+      xi[j].clear();
+      for(size_t c = 0; c <= n_cutpoints; c++) xi[j].push_back(x_min + (double) c * x_range/( (double) n_cutpoints));
+    }
+  } // closes loop over j
+}
+
+
+/*
+void make_cutpoints(xinfo &xi, const size_t n_obs, const size_t p, const size_t p_obs, const size_t num_u, double *x_ptr, const size_t n_cutpoints)
+{
+  xi.resize(p);
+  double x_min = 0.0;
+  double x_max = 0.0;
+  double sx = 0.0; // for sum
+  double sxx = 0.0; // for sum of squares
+  double sigma_x = 0.0;
+  double x_range = 0.0;
+  
+  bool binary_flag = false;
+  for(size_t j = 0; j < p; j++){
+    // loop over to see if it is a binary indicator
+    binary_flag = true;
+    for(size_t i = 0; i < n_obs; i++){
+      if( (x_ptr[j + i*p] != 0.0) && (x_ptr[j + i*p] != 1.0) ){
+        binary_flag = false;
+        break;
+      }
+    }
+    if(binary_flag == true){
+      xi[j].clear();
+      xi[j].push_back(0.0);
+      xi[j].push_back(1.0);
+    } else{
+      x_min = x_ptr[j + 0*p];
+      x_max = x_ptr[j + 0*p];
+      sx = 0.0;
+      sxx = 0.0;
+      for(size_t i = 0; i < n_obs; i++){
+        if(x_min < x_ptr[i + j*p]) x_min = x_ptr[i + j*p];
+        if(x_max > x_ptr[i + j*p]) x_max = x_ptr[i + j*p];
+        sx += x_ptr[i + j*p];
+        sxx += x_ptr[i + j*p] * x_ptr[i + j*p];
+      }
+      sigma_x = sqrt(1.0/( (double) n_obs - 1) * (sxx - (double) n_obs * sx * sx)); // sd of X[,j]
+      
+      if(j < p_obs){
+        x_range = x_max - x_min;
+        xi[j].clear();
+        for(size_t c = 0; c <= n_cutpoints; c++) xi[j].push_back(x_min + (double) c * x_range/( (double) n_cutpoints));
+      } else{
+        x_range = x_max - x_min + 4 * sigma_x; // pad the range by 2 SD's
+        xi[j].clear();
+        for(size_t c = 0; c <= n_cutpoints; c++) xi[j].push_back(x_min - 2.0 * sigma_x + (double) c * x_range/( (double) n_cutpoints));
+      } // closes if checking if j > p_obs
+    } // closes if/else checking if j^th predictor is binary or not
+  }// closes loop over j
+
+}
+*/
+
+//--------------------------------------------------
 //get sufficients stats for all bottom nodes (sy, sy2)
 void allsuff(tree& x, xinfo& xi, dinfo& di, tree::npv& bnv, std::vector<sinfo>& sv)
 {
@@ -1532,3 +1623,5 @@ void update_sigma(const arma::mat &Phi, arma::vec &sigma, dinfo_slfm &di, pinfo_
     sigma(k) = sqrt((pi.nu * pi.lambda[k] + s)/gen.chi_square(pi.nu + n));
   } //closes loop over the tasks
 }
+
+

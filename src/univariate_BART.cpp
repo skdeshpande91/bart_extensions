@@ -144,6 +144,8 @@ Rcpp::List univariate_BART(arma::vec Y,
     Rcpp::Rcout << "sigma_pi.sigma_hat = " << sigma_pi.sigma_hat << endl;
     Rcpp::Rcout << "sigma_pi.lambda = " << sigma_pi.lambda << endl;
     Rcpp::Rcout << "tree_pi.sigma_mu = " << tree_pi.sigma_mu << endl;
+    Rcpp::Rcout << "y_mean = " << y_mean << endl;
+    Rcpp::Rcout << "y_sd = " << y_sd << endl;
   }
  
   data_info di;

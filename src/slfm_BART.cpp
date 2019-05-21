@@ -55,6 +55,7 @@ Rcpp::List slfm_BART(arma::mat Y,
     if(y_col_min[k] < y_min) y_min = y_col_min[k];
     if(y_col_max[k] > y_max) y_max = y_col_max[k];
   }
+  Rcpp::Rcout << "y_max = " << y_max << " y_min = " << y_min << endl;
   
   
   if(verbose == true) Rcpp::Rcout << "  Centered and scaled Y" << std::endl;
@@ -141,7 +142,7 @@ Rcpp::List slfm_BART(arma::mat Y,
   u_tree_pi.alpha = 0.95;
   u_tree_pi.beta = 2.0;
   u_tree_pi.sigma_mu = (y_max - y_min)/(2.0 * kappa * sqrt( ( (double) D) * ( (double) m)));
-  Rcpp::Rcout << "sigma_mu = " << u_tree_pi.sigma_mu << endl;
+  //Rcpp::Rcout << "sigma_mu = " << u_tree_pi.sigma_mu << endl;
   u_tree_pi.r_p = &r_partial_u[0]; // tracks partial residual when we remove a single tree from a given basis function
   
   // since we have q residuals, we need a vector of sigma_prior_info objects
@@ -199,6 +200,17 @@ Rcpp::List slfm_BART(arma::mat Y,
   // diagnostics
   arma::mat alpha_samples = arma::zeros<arma::mat>(m*D, nd + burn);
   arma::mat tree_depth_samples = arma::zeros<arma::mat>(m*D, nd + burn);
+  
+  if(verbose == true){
+    Rcpp::Rcout << "sigma_mu: " << u_tree_pi.sigma_mu << endl;
+    Rcpp::Rcout << "sigma_phi: ";
+    for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << phi_pi.sigma_phi[k];
+    Rcpp::Rcout << endl;
+    Rcpp::Rcout << "lambda :";
+    for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << sigma_pi[k].lambda;
+    Rcpp::Rcout << endl;
+  }
+  
   
   if(verbose == true) Rcpp::Rcout << "  Starting MCMC" << endl;
   time_t tp;

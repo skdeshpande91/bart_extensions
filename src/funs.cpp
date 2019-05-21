@@ -226,8 +226,8 @@ void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::v
     } else{
       y_col_mean(k) = tmp_sum/tmp_count;
       y_col_sd(k) = sqrt(1.0/(tmp_count - 1) * (tmp_sum2 - tmp_sum*tmp_sum/tmp_count));
-      y_col_max(k) = Y(max_index,k);
-      y_col_min(k) = Y(min_index,k);
+      //y_col_max(k) = Y(max_index,k);
+      //y_col_min(k) = Y(min_index,k);
       // We can now re-center and re-scale the data in Y.col(k)
       for(size_t i = 0; i < n_obs; i++){
         if(Y(i,k) == Y(i,k)){
@@ -235,6 +235,12 @@ void prepare_y(arma::mat &Y, arma::vec &y_col_mean, arma::vec &y_col_sd, arma::v
           Y(i,k) /= y_col_sd(k);
         }
       } // closes loop over observations
+      
+      // MUST RE-SCALE/RE-CENTER Y before extracting the min and max of each column.
+      // Otherwise the value of sigma_mu will be totally screwed up
+      y_col_max(k) = Y(max_index,k);
+      y_col_min(k) = Y(min_index,k);
+      
     } // closes else checking that we have at least 2 observations of this task
   } // closes loop over tasks
 }
@@ -288,8 +294,8 @@ void prepare_y(arma::mat &Y, std::vector<double> &y_col_mean, std::vector<double
     } else{
       y_col_mean[k] = tmp_sum/tmp_count;
       y_col_sd[k] = sqrt(1.0/(tmp_count - 1) * (tmp_sum2 - tmp_sum*tmp_sum/tmp_count));
-      y_col_max[k] = Y(max_index,k);
-      y_col_min[k] = Y(min_index,k);
+      //y_col_max[k] = Y(max_index,k);
+      //y_col_min[k] = Y(min_index,k);
       // We can now re-center and re-scale the data in Y.col(k)
       for(size_t i = 0; i < n_obs; i++){
         if(Y(i,k) == Y(i,k)){
@@ -297,6 +303,9 @@ void prepare_y(arma::mat &Y, std::vector<double> &y_col_mean, std::vector<double
           Y(i,k) /= y_col_sd[k];
         }
       } // closes loop over observations
+      // MUST RE-SCALE Y before extracting min and max of each column. Otherwise sigma_mu is too large
+      y_col_max[k] = Y(max_index,k);
+      y_col_min[k] = Y(min_index,k);
     } // closes else checking that we have at least 2 observations of this task
   } // closes loop over tasks
 }
@@ -327,8 +336,8 @@ void prepare_y(arma::vec &Y, double &y_mean, double &y_sd, double &y_max, double
   else{
     y_mean = tmp_sum/tmp_count;
     y_sd = sqrt(1.0/(tmp_count - 1) * (tmp_sum2 - tmp_sum * tmp_sum/tmp_count));
-    y_min = Y(min_index);
-    y_max = Y(max_index);
+    //y_min = Y(min_index);
+    //y_max = Y(max_index);
     
     // center and scale the data now
     for(size_t i = 0; i < n_obs; i++){
@@ -337,6 +346,9 @@ void prepare_y(arma::vec &Y, double &y_mean, double &y_sd, double &y_max, double
         Y(i) /= y_sd;
       }
     } // closes loop over the observations
+    // MUST RESCALE Y before extracting min and max
+    y_min = Y(min_index);
+    y_max = Y(max_index);
   } // closes else checking that we have at least 2 observed values of Y
   
 }

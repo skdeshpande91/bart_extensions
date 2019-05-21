@@ -154,6 +154,15 @@ Rcpp::List sep_BART(arma::mat Y,
     Rcpp::Rcout << "  sigma_mu: " ;
     for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << tree_pi[k].sigma_mu;
     Rcpp::Rcout << std::endl;
+    
+    Rcpp::Rcout << "y_col_mean: ";
+    for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << y_col_mean[k];
+    Rcpp::Rcout << endl;
+    
+    Rcpp::Rcout << "y_col_sd: ";
+    for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << y_col_sd[k];
+    Rcpp::Rcout << endl;
+    
   }
   
   // Create data_info

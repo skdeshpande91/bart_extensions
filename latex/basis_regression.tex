@@ -1,0 +1,173 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, amsthm, float, fullpage, graphicx, multirow,parskip, subcaption, setspace}
+\usepackage{comment}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, positioning}
+\usetikzlibrary{quotes, angles}
+\usepackage{rotating}
+\usepackage{hyperref}
+\usepackage{natbib}
+
+\definecolor{PennRed}{RGB}{152, 30 50}
+\definecolor{PennBlue}{RGB}{0, 44, 119}
+\definecolor{PennGreen}{RGB}{94, 179,70}
+\definecolor{PennViolet}{RGB}{141, 76, 145}
+\definecolor{PennSkyBlue}{RGB}{14, 118, 188}
+\definecolor{PennOrange}{RGB}{243, 117, 58}
+\definecolor{PennBrightRed}{RGB}{223,82, 78}
+
+
+\hypersetup{pdfborder = {0 0 0.5 [3 3]}, colorlinks = true, linkcolor = PennBrightRed, citecolor = PennSkyBlue}
+
+\bibliographystyle{apalike}
+
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
+
+
+\title{Ensembling Treed Basis Regressions}
+\author{Sameer K. Deshpande}
+
+\onehalfspacing
+
+\begin{document}
+\maketitle
+\def\C{\mathbb{C}}
+\def\R{\mathbb{R}}
+\def\Q{\mathbb{Q}}
+\def\Z{\mathbb{Z}}
+%\def\N{\mathbb{N}}
+\def\N{\text{N}}
+\def\P{\mathbb{P}}
+\def\E{\mathbb{E}}
+\def\by{\mathbf{y}}
+\def\bx{\mathbf{x}}
+\def\bz{\mathbf{z}}
+\def\bw{\mathbf{w}}
+\def\br{\mathbf{r}}
+\def\bu{\mathbf{u}}
+\def\bY{\mathbf{Y}}
+\def\bX{\mathbf{X}}
+\def\bf{\mathbf{f}}
+\def\bgamma{\boldsymbol{\gamma}}
+\def\bSigma{\boldsymbol{\Sigma}}
+\def\bsigma{\boldsymbol{\sigma}}
+\def\bmu{\boldsymbol{\mu}}
+\def\btheta{\boldsymbol{\theta}}
+
+\def\M{\mathcal{M}}
+\def\T{\mathcal{T}}
+\def\tilT{\tilde{T}}
+
+
+\section{General Setup}
+\label{sec:introduction}
+
+Suppose we observe time series data for $n$ individuals sampled irregularly in the intervals $[0,T].$
+For individual $i,$ we observe $\bx_{i} \in \R^{p}$ a vector of covariates and also $y_{i,J}$ at time $t_{i,j} \in [0,T].$
+We model
+$$
+y_{i,j} = f(\bx_{i}, t_{i,j}) + \sigma \varepsilon_{i,j}
+$$
+where $\varepsilon_{i,j} \sim N(0,1).$
+We express the unknown function $f$ as the sum of $m$ ``functional regression trees.''
+
+To set our notation, let $T$ denote a binary decision tree partitioning $\R^{p}$ that consists of a collection of interior nodes and $L(T)$ terminal or \textit{leaf} nodes. 
+We associate an axis-aligned decision rule of the form $\left\{x_{j} < c \right\}$ or $\left\{x_{j} \geq c \right\}$ to each internal (i.e. non-leaf) node of $T.$
+In this way, $T$ defines a partition of $\R^{p}$ into $L(T)$ rectangular cells, corresponding to the leaves of $T$,  and we let $\ell(\bx ,T)$ be the function that returns the index of the cell containing the point $\bx.$
+A \textit{functional regression tree} $(T, \varphi, \Theta)$ consists of a decision tree $T$, a fixed feature map $\varphi: [0,T] \rightarrow \R^{D}$ and a collection $M = \left\{\btheta_{1}, \ldots, \btheta_{L(T)}\right\}$ where each $\btheta_{\ell} \in \R^{D}.$
+We define the evaluation function 
+$$
+g(\bx, t; T, \varphi, \Theta) = \varphi(t)^{\top}\btheta_{\ell(\bx;T)}.
+$$
+For a given tree $T$ and leaf index $\ell,$ let $I(\ell; T)$ be the collection of indices $i$ such that $\ell(\bx_{i}; T) = \ell.$
+For our purposes, we will consider the cosine basis function where $\varphi = (\phi_{1}, \ldots, \phi_{D})$ where $\phi_{d}(t) = \left(\frac{2}{T}\right)^{\frac{1}{2}}\cos\left(\frac{d \pi t}{T}\right).$
+\textcolor{blue}{[skd]: we could also consider adding in sines to force these functions to be periodic. 
+We approximate
+$$
+f(\bx, t) = \sum_{m = 1}^{M}{g(\bx, t; T_{m}, \phi, \Theta_{m})}.
+$$
+Upon placing a prior on the regression trees and updating it with the observed data, we can induce a posterior distribution over $f.$
+
+The prior over regression trees consists of two parts: a decision tree prior and the conditional prior of $M \mid T.$
+For the first part, we use exactly the same prior as \citet{Chipman2010}: the probability that node at depth $d$ is internal is $\alpha(1 + d)^{-\beta}$ and conditional on a node being internal, the splitting rule is picked uniformly from the set of all available splitting rules.
+Conditional on the decision tree $T,$ the associated leaf parameters are modeled as i.i.d. $N(0, \sigma_{\theta}^{2}D\Lambda_{\theta})$ where $\Lambda_{\theta} = \text{diag}(e^{-\gamma c_{d}})$
+We follow \citet{Lenk1999} and take $c_{d} = d$ (the ``algebraic smoother'') or $\log{d}$ (the ``geometric smoother'').
+The parameter $\gamma$ controls how quickly the Fourier coefficients in $\btheta_{\ell}$ decay to zero, implicitly controlling the smoothness of $g(\bx, t; T, M)$ as a function of $t.$
+
+
+\section{A Backfitting Strategy}
+
+We now briefly summarize how to extend \citet{Chipman2010}s backfitting strategy to this functional setting.
+We have $m$ regression trees $(T_{1}, \Theta_{1}),\ldots, (T_{M}, \Theta_{M}),$ which we update one at a time, holding all else fixed.
+Let $(T_{-m}, \Theta_{-m})$ be the set of all $M-1$ regression trees besides $(T_{m}, \Theta_{m})$ and define
+$$
+r_{i,j,m} = y_{i,j} - \sum_{m' \neq m}{g(\bx_{i}, t_{i,j}; T_{m'}, \Theta_{m'})}.
+$$
+%With this residual so defined, we see that the conditional likelihood of $(T_{m}, \Theta_{m})$ keeping all other regression trees fixed can be written as
+%$$
+%p(y_{i,j} \mid T_{m}, \Theta_{m}, T_{-m}, \Theta_{-m}, \sigma) = \left(2\pi\sigma^{2}\right)^{-\frac{1}{2}}\exp\left\{-\frac{1}{2\sigma^{2}}\exp\left\{r_{i,j,m} - g(\bx_{i}, t_{j}; T_{m}, M_{t})\right\}
+%$$
+
+Observe that
+\begin{align*}
+\pi(T_{m}, \Theta_{m} \mid \by, T_{-m}, \Theta_{-m}, \sigma) &\propto \pi(T_{m})\prod_{\ell = 1}^{L}{\prod_{i \in I(\ell; T)}{\prod_{j = 1}^{n_{i}}{\exp\left\{-\frac{(r_{i,j,m} - \varphi(t_{i,j})^{\top}\btheta_{\ell})^{2}}{2\sigma^{2}}\right\}}}} \\
+& ~ ~ \times \prod_{\ell = 1}^{L}{\sigma^{-D}_{\theta}\lvert\Lambda_{\theta}\rvert^{-\frac{1}{2}}\exp\left\{-\frac{\btheta_{\ell}^{\top}\Lambda^{-1}_{\theta}\btheta_{\ell}}{2\sigma^{2}}\right\}}
+%&~~\times \prod_{\ell = 1}^{L}{\left(\sigma^{2}\right)^{-\frac{D}{2}}\lvert \cdot \rvert^{-\frac{1}{2}}\exp\left\{-\frac{\btheta_{\ell}^{\top}\text{diag}(e^{\gamma c_{d}})\btheta_{\ell}}{2\sigma^{2}_{\theta}}\right\}}
+\end{align*}
+
+From here, we immediately see that the $\btheta_{\ell}$'s are independent \textit{a posteriori} with  $\btheta_{\ell} \sim N(M_{\ell}, V_{\ell})$ where
+\begin{align*}
+V_{\ell} &= \left[\sigma^{-2}_{\theta}\Lambda^{-1}_{\theta} + \sigma^{-2}\sum_{i \in I(\ell; T)}{\sum_{j = 1}^{n_{i}}{\varphi(t_{i,j})\varphi(t_{i,j})^{\top}}}\right]^{-1} \\
+M_{\ell} &= V_{\ell}\left[\sigma^{-2}\sum_{i \in I(\ell; T)}{\sum_{j = 1}^{n_{i}}{r_{i,j,m}\phi(t_{i,j})}}\right].
+\end{align*}
+
+Marginalizing over $\Theta_{m},$ we have the following conditional posterior probability over the decision tree $T$
+$$
+\pi(T \mid T_{-m}, \Theta_{-m}, \by, \sigma^{2}) \propto \pi(T)\prod_{\ell = 1}^{L}{\sigma_{\theta}^{-D}\lvert \Lambda \rvert^{-\frac{1}{2}} \lvert V_{\ell} \rvert^{\frac{1}{2}}\exp\left\{\frac{1}{2}M_{\ell}^{\top}V^{-1}_{\ell}M_{\ell}\right\}}
+$$
+
+
+To carry out the update $(T, \Theta) \rightarrow (T^{*}, \Theta^{*}),$ we first propose a new tree $T_{prop}$ by either growing $T$ at one leaf node or by pruning two leafs back to their common parent node.
+We accept this proposal with probability
+$$
+\alpha(T_{prop}, T) = \min\left\{1, \frac{q(T, T_{prop})\pi(T_{prop} \mid \by, T_{-m}, \Theta_{-m}, \sigma)}{q(T_{prop}, T)\pi(T \mid \by, T_{-m}, \Theta_{-m}, \sigma)}\right\}.
+$$
+If we accept the proposal we set $T^{*} = T_{prop};$ otherwise we set $T^{*} = T.$
+We then update $\Theta^{*}$ conditionally on $T^{*}$ by making conjugate normal draws.
+It should be noted that to carry out this update requires computing the inverse and determinant of $L(T) + 1$ covariance matrices $V_{\ell}.$
+So the computational cost of each regression tree update is $O(L(T)D^{3}).$
+\textcolor{blue}{[skd]: there's probability a factor of $n$ lurking in there somewhere because we need to sum over $\varphi(t_{i,j})\varphi(t_{i,j})^{\top}$}
+
+
+\newpage
+\bibliography{bart.bib}
+
+\end{document}

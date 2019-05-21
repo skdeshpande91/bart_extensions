@@ -11,7 +11,7 @@ load("~/Dropbox/Broderick_Group/bart_extensions/data/forex.RData")
 
 
 sep_fit <- sep_bartFit(Y_train, X_train, X_train, cutpoints, verbose = TRUE)
-slfm_D50_m50 <- slfm_bartFit(Y_train, X_train, X_train, cutpoints, verbose = TRUE, D = 50, m = 50)
+slfm_D50_m50 <- slfm_BART(Y_train, X_train, X_train, cutpoints, verbose = TRUE, D = 50, m = 50)
 
 dimnames(sep_fit$f_test_samples) <- list(c(), colnames(Y_train), c())
 dimnames(slfm_D50_m50$f_test_samples) <- list(c(), colnames(Y_train), c())
@@ -43,7 +43,7 @@ plot(1, type = "n", xlim = c(0, 250), ylim = c(0.75, 1.15), main = "CAD", ylab =
 
 polygon(c(X_train, rev(X_train)), c(slfm_D50_m50$test_quantiles[,"USD.CAD","0.025"], rev(slfm_D50_m50$test_quantiles[,"USD.CAD", "0.975"])),
         col = rgb(0,0,1,1/3), border = NA)
-polygon(c(X_train, rev(X_train)), c(slfm_D50_m50$test_quantiles[,"USD.CAD","0.025"], rev(sep_fit$test_quantiles[,"USD.CAD", "0.975"])),
+polygon(c(X_train, rev(X_train)), c(sep_fit$test_quantiles[,"USD.CAD","0.025"], rev(sep_fit$test_quantiles[,"USD.CAD", "0.975"])),
         col = rgb(1,0,0,1/3), border = NA)
 lines(rowMeans(sep_fit$f_test_samples[,"USD.CAD",]), col = 'red')
 lines(rowMeans(slfm_D50_m50$f_test_samples[,"USD.CAD",]), col = 'blue')

@@ -1,0 +1,15 @@
+\begin{thebibliography}{}
+
+\bibitem[Chipman et~al., 2010]{Chipman2010}
+Chipman, H.~A., George, E.~I., and McCulloch, R.~E. (2010).
+\newblock Bart: {B}ayesian additive regression trees.
+\newblock {\em The Annals of Applied Statistics}, 4(1):266 -- 298.
+
+\bibitem[Lenk, 1999]{Lenk1999}
+Lenk, P.~J. (1999).
+\newblock Bayesian inference for semiparametric regression using a {Fourier}
+  representation.
+\newblock {\em Journal of the Royal Statistical Society (Series B)}, 61(4):863
+  -- 879.
+
+\end{thebibliography}

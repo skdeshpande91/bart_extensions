@@ -100,19 +100,19 @@ Rcpp::List slfm_BART(arma::mat Y,
   // Initialize trees
   std::vector<std::vector<tree> > t_vec(D, std::vector<tree>(m));
   
-  double* allfit = new double[n];
-  double* allfit_pred = new double[n];
+  double* allfit = new double[n_obs * q];
+  double* allfit_pred = new double[n_pred*q];
   double* ftemp = new double[n_obs];
   double* ftemp_pred = new double[n_pred];
   
   double* ufit = new double[n_obs * D];
   double* ufit_pred = new double[n_pred * D];
   
-  double* r_full = new double[n]; // holds full residuals for training observations. Used primarily to update sigma
+  double* r_full = new double[n_obs * q]; // holds full residuals for training observations. Used primarily to update sigma
   // !! For SLFM when we hold out a single tree, we affect the fit of all n_obs * q outputs
   // so r_partial needs to be of size n = n_obs * q.
   // will continue to track this the tree_prior_info class
-  double* r_partial_u = new double[n]; // holds partial residual when we fix rest of trees.
+  double* r_partial_u = new double[n_obs * q]; // holds partial residual when we fix rest of trees.
   
   for(size_t d = 0; d < D; d++){
     for(size_t t = 0; t < m; t++) t_vec[d][t].setm(0.0);
@@ -128,6 +128,7 @@ Rcpp::List slfm_BART(arma::mat Y,
         r_partial_u[k + i*q] = 0.0; // initial value does not matter much since we update it immediately
       }
     }
+    for(size_t i = 0; i < n_pred; i++) allfit_pred[k + i*q] = 0.0;
   }
   
   for(size_t i = 0; i < n_obs; i++) ftemp[i] = 0.0;

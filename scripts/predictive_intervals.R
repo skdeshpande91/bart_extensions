@@ -41,3 +41,17 @@ bart_quantiles <- function(fit, prob = c(0.025, 0.975)){
   }
   return(quantiles)
 }
+
+f_quantiles <- function(fit, prob = c(0.025, 0.975)){
+  n_pred <- dim(fit$f_test_samples)[1]
+  q <- dim(fit$f_test_samples)[2]
+  quantiles <- array(NA, dim = c(n_pred, q, length(prob)), dimnames = list(c(), colnames(fit$f_test_samples), prob))
+  for(i in 1:n_pred){
+    for(k in 1:q){
+      for(pr in prob){
+        quantiles[i,k,as.character(pr)] <- quantile(fit$f_test_samples[i,k,], probs = pr)
+      }
+    }
+  }
+  return(quantiles)
+}

@@ -105,10 +105,10 @@ Rcpp::List sep_BART(arma::mat Y,
   
   double* r_full = new double[n]; // holds all residuals for training observations
   double* r_partial = new double[n_obs]; // holds partial residuals
+  //double* r_partial = new double[n_obs * q]; // holds partial residuals for all observations
   
   for(size_t k = 0; k < q; k++){
     for(size_t t = 0; t < m; t++) t_vec[k][t].setm(0.0);
-    
     for(size_t i = 0; i < n_obs; i++){
       allfit[k + i*q] = 0.0;
       if(delta_ptr[k + i*q] == 1) r_full[k + i *q] = y_ptr[k + i * q]  - allfit[k + i*q];
@@ -201,19 +201,32 @@ Rcpp::List sep_BART(arma::mat Y,
       if(iter < burn & iter%50 == 0) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Burn-in" << std::endl;
       else if( (iter > burn & iter%50 == 0) || (iter == burn)) Rcpp::Rcout << "  MCMC Iteration: " << iter << " of " << nd + burn << "; Sampling" <<std::endl;
     }
+    //Rcpp::Rcout << "iter = " << iter << endl;
     
     // Loop over each task and update the corresponding trees
     for(size_t k = 0; k < q; k++){
+      //Rcpp::Rcout << "  k = " << k << endl;
       if(sigma[k] != sigma[k]) Rcpp::Rcout << "iter " << iter << " k = " << k << " sigma[k] is nan" << endl;
       for(size_t t = 0; t < m; t++){
+        //Rcpp::Rcout << "  t = " << t;
         fit(t_vec[k][t], xi, di, ftemp); // get current fit of tree t for task k
         for(size_t i = 0; i < n_obs; i++){
           if(ftemp[i] != ftemp[i]) Rcpp::stop("nan in ftemp!");
           allfit[k + i*q] -= ftemp[i]; // subtract fit of tree t, task k from allfit
           if(delta_ptr[k + i*q] == 1) r_partial[i] = y_ptr[k + i*q] - allfit[k + i*q]; // update partial residual
         }
-        alpha_samples(t + k*m, iter) = bd_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // do the birth/death move
-        drmu_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // draw the new values of mu
+        
+        
+        
+        //alpha_samples(t + k*m, iter) = bd_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // do the birth/death move
+        //drmu_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], gen); // draw the new values of mu
+        
+        // 17 June 2019: need to pass the index of the task we are updating now
+        alpha_samples(t + k*m, iter) = bd_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], k, gen);
+        //Rcpp::Rcout << " finished bd";
+        drmu_uni(t_vec[k][t], sigma[k], xi, di, tree_pi[k], k, gen);
+        //Rcpp::Rcout << "  drew mu!" << endl;
+        
         fit(t_vec[k][t], xi, di, ftemp); // Update the fit from tree t, task k
         
         for(size_t i = 0; i < n_obs; i++){

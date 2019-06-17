@@ -146,6 +146,8 @@ void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinf
 
 void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinfo &si, data_info &di, tree_prior_info &tree_pi); // overloaded for the new prior info classes
 
+// new function from 17 June 2019 -- tracks which outcome is being updated.
+void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinfo &si, data_info &di, tree_prior_info &tree_pi, size_t k);
 
 void mu_posterior_slfm(double &mu_bar, double &V, const arma::mat Phi, const arma::vec sigma, sinfo &si, dinfo_slfm &di, double sigma_mu); //for SLFM
 
@@ -216,7 +218,7 @@ void partition(tree& t, xinfo& xi, dinfo& di, std::vector<size_t>& pv);
 //void drmu_multi(tree &t, const arma::mat  &Omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
 void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG &gen);
 void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, RNG &gen); // overloaded for the new prior info classes
-
+void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, size_t k, RNG &gen);
 
 void drmu_slfm(tree &t, const arma::mat Phi, const arma::vec sigma, xinfo &xi, dinfo_slfm &di, pinfo_slfm &pi, RNG &gen);
 void drmu_slfm(tree &t, const arma::mat &Phi, const std::vector<double> &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, phi_prior_info &phi_pi, RNG &gen); // overloaded for the new prior info classes

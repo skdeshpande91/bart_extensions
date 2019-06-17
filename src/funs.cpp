@@ -1029,6 +1029,9 @@ void mu_posterior_uni(double &mu_bar, double &V, const double &omega, const sinf
 }
 
 // overloaded
+// The below function was what was being used prior to 17 June 2019
+// the way it access di.delta is not portable to the multi-task setting when we want to have task-specific fits
+
 void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinfo &si, data_info &di, tree_prior_info &tree_pi)
 {
   double V_inv = 1.0/(tree_pi.sigma_mu * tree_pi.sigma_mu);
@@ -1036,6 +1039,27 @@ void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinf
   if(si.n > 0){
     for(size_t i = 0; i < si.I.size(); i++){
       if(di.delta[si.I[i]] == 1){ // we actually observe the outcome
+        V_inv += di.weight / (sigma * sigma);
+        mu_bar += di.weight * tree_pi.r_p[si.I[i]]/(sigma * sigma);
+      }
+    }
+  }
+  V = 1.0/V_inv;
+  mu_bar *= V;
+}
+
+/* 17 June 2019: mu_posterior_uni currently accesses di.delta[si.I[i]]
+  If we want to have separate univariate BART fits for multi-task data, we need to access something slightly different
+  We really need to check di.delta[k + si.I[i] * q]
+ 
+ */
+void mu_posterior_uni(double &mu_bar, double &V, const double &sigma, const sinfo &si, data_info &di, tree_prior_info &tree_pi, size_t k)
+{
+  double V_inv = 1.0/(tree_pi.sigma_mu * tree_pi.sigma_mu);
+  mu_bar = 0.0;
+  if(si.n > 0){
+    for(size_t i = 0; i < si.I.size(); i++){
+      if(di.delta[k + si.I[i]*di.q] == 1){
         V_inv += di.weight / (sigma * sigma);
         mu_bar += di.weight * tree_pi.r_p[si.I[i]]/(sigma * sigma);
       }
@@ -1230,6 +1254,7 @@ void drmu_uni(tree &t, const double &omega, xinfo &xi, dinfo &di, pinfo &pi, RNG
 }
 
 //overloaded for the new prior info classes
+
 void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, RNG &gen)
 {
   tree::npv bnv; // bottom nodes
@@ -1243,8 +1268,42 @@ void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior
     V = 0.0;
     mu_posterior_uni(mu_bar, V, sigma, sv[i], di, tree_pi);
     bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
-    if(bnv[i]->getm() != bnv[i]->getm()) Rcpp::stop("nan in drmu_uni");
+    if(bnv[i]->getm() != bnv[i]->getm()){
+      Rcpp::Rcout << "nan in drmu_uni" << endl;
+      Rcpp::Rcout << "problem is in node " << i << " of " << bnv.size() << endl;
+      Rcpp::Rcout << "node members : ";
+      for(size_t ii = 0; ii < sv[i].n; ii++) Rcpp::Rcout << " " << sv[i].I[ii] ;
+      Rcpp::Rcout << endl;
+      Rcpp::Rcout << "mu_bar = " << mu_bar << "  V = " << V << endl;
+      Rcpp::stop("nan in drmu_uni");
+    }
   } // closes loop over the bottom nodes
+}
+
+// new function from 17 June that corrects the look-up in di.delta
+void drmu_uni(tree &t, const double &sigma, xinfo &xi, data_info &di, tree_prior_info &tree_pi, size_t k, RNG &gen)
+{
+  tree::npv bnv; // bottom nodes
+  std::vector<sinfo> sv; // for sufficient stats for each bottom node
+  allsuff(t, xi, di, bnv, sv); // get all sufficient  statistics for each bottom node
+  
+  double mu_bar = 0.0;
+  double V = 0.0;
+  for(tree::npv::size_type i = 0; i != bnv.size(); i++){
+    mu_bar = 0.0;
+    V = 0.0;
+    mu_posterior_uni(mu_bar, V, sigma, sv[i], di, tree_pi, k);
+    bnv[i]->setm(mu_bar + sqrt(V) * gen.normal());
+    if(bnv[i]->getm() != bnv[i]->getm()){
+      Rcpp::Rcout << "nan in drmu_uni" << endl;
+      Rcpp::Rcout << "problem is in node " << i << " of " << bnv.size() << endl;
+      Rcpp::Rcout << "node members : ";
+      for(size_t ii = 0; ii < sv[i].n; ii++) Rcpp::Rcout << " " << sv[i].I[ii] ;
+      Rcpp::Rcout << endl;
+      Rcpp::Rcout << "mu_bar = " << mu_bar << "  V = " << V << endl;
+      Rcpp::stop("nan in drmu_uni");
+    }
+  }
 }
 
 

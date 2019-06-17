@@ -20,7 +20,7 @@ public:
   double *r_f; // i^th full residual of k^th outcome is *(r_f + q*i + k)
   double *delta; // will track missing observations. specifically delta[k + i*q] = 1 if we observe y[i,k] and 0 otherwise
   //constructor
-  data_info(){n=0;p=0;q=0;weight=1.0;x=0;y=0;r_f=0;delta=0;}
+  data_info(){n=0;p=0;q=1;weight=1.0;x=0;y=0;r_f=0;delta=0;}
 };
 
 // possibly we will have to add some attributes to handle the sparse BART parameters

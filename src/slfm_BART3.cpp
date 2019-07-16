@@ -1,8 +1,8 @@
 //
-//  slfm_BART2.cpp
-//  Uses a different hyper-parameter specification
-//
-//  Created by Sameer Deshpande on 6/17/19.
+//  slfm_BART3.cpp
+//    We will now require sigma_phi to be passed in as an argument
+//    This is designed to make sure the marginal prior on f_k(x) places a user-specified amount of probability on the range of the (centered & scaled) data.
+//  Created by Sameer Deshpande on 7/16/19.
 //
 
 #include <RcppArmadillo.h>
@@ -17,19 +17,18 @@
 #include "funs.h"
 #include "bd.h"
 
-#include <stdio.h>
-
 using namespace Rcpp;
 // [[Rcpp::export]]
-Rcpp::List slfm_BART2(arma::mat Y,
-                     arma::mat X,
-                     arma::mat X_pred,
-                     Rcpp::List xinfo_list,
-                     double weight = 1.0,
-                     int burn = 250, int nd = 1000,
-                     size_t D = 10, size_t m = 50, double kappa = 2.0,
-                     double nu = 3, double var_prob = 0.9,
-                     bool verbose = false)
+Rcpp::List slfm_BART3(arma::mat Y,
+                      arma::mat X,
+                      arma::mat X_pred,
+                      Rcpp::List xinfo_list,
+                      arma::vec sigma_phi,
+                      double weight = 1.0,
+                      int burn = 250, int nd = 1000,
+                      size_t D = 10, size_t m = 50,
+                      double nu = 3, double var_prob = 0.9,
+                      bool verbose = false)
 {
   if(verbose == true) Rcpp::Rcout << "Entering slfm_BART" << endl;
   RNGScope scope;
@@ -56,9 +55,6 @@ Rcpp::List slfm_BART2(arma::mat Y,
     if(y_col_max[k] > y_max) y_max = y_col_max[k];
   }
   Rcpp::Rcout << "y_max = " << y_max << " y_min = " << y_min << endl;
-  
-  
-  if(verbose == true) Rcpp::Rcout << "  Centered and scaled Y" << std::endl;
   
   // create pointers for x, y, x_pred, and delta
   double* y_ptr = new double[n];
@@ -142,8 +138,8 @@ Rcpp::List slfm_BART2(arma::mat Y,
   u_tree_pi.pb = 0.5;
   u_tree_pi.alpha = 0.95;
   u_tree_pi.beta = 2.0;
-  //u_tree_pi.sigma_mu = 1.0/sqrt( ((double) D) * ((double) m)); // ensures that each basis element has variance 1/D.
-  u_tree_pi.sigma_mu = 1.0/sqrt( (double) m); // 17 July 2019 -- guarantee that each basis element has variance 1
+  //u_tree_pi.sigma_mu = 1.0/sqrt( ((double) D) * ((double) m)); // this ensures that each basis element has variance 1/D
+  u_tree_pi.sigma_mu = 1.0/sqrt( (double) m); // 17 June 2019 -- ensures that each basis element has variance 1
   //Rcpp::Rcout << "sigma_mu = " << u_tree_pi.sigma_mu << endl;
   u_tree_pi.r_p = &r_partial_u[0]; // tracks partial residual when we remove a single tree from a given basis function
   
@@ -169,8 +165,7 @@ Rcpp::List slfm_BART2(arma::mat Y,
   phi_pi.sigma_phi.resize(q);
   tmp_quantile = qchisq(Named("p") = var_prob, Named("df") = D);
   chisq_quantile = tmp_quantile[0];
-  //for(size_t k = 0; k < q; k++) phi_pi.sigma_phi[k] = sqrt( ((double) D)/chisq_quantile) * (y_col_max[k] - y_col_min[k])/(2.0 * kappa); // sqrt(D) is there because basis elements have variance 1/D
-  for(size_t k = 0; k < q; k++) phi_pi.sigma_phi[k] = sqrt(1.0/chisq_quantile) * (y_col_max[k] - y_col_min[k])/(2.0 * kappa); // 17 July 2019 -- now basis elements have variance 1.
+  for(size_t k = 0; k < q; k++) phi_pi.sigma_phi[k] = sigma_phi(k); // 17 June 2019 -- remember that sigma_phi is passed as an argument
   
   // set up data info
   data_info di;
@@ -213,8 +208,6 @@ Rcpp::List slfm_BART2(arma::mat Y,
     for(size_t k = 0; k < q; k++) Rcpp::Rcout << " " << sigma_pi[k].lambda;
     Rcpp::Rcout << endl;
   }
-  
-  
   if(verbose == true) Rcpp::Rcout << "  Starting MCMC" << endl;
   time_t tp;
   int time1 = time(&tp);
@@ -318,4 +311,3 @@ Rcpp::List slfm_BART2(arma::mat Y,
   results["time"] = time2 - time1;
   return(results);
 }
-
